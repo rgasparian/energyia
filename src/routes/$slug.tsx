@@ -1,8 +1,14 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import ConsultorPage from "./consultor.$slug";
 
 export const Route = createFileRoute("/$slug")({
   beforeLoad: ({ params }) => {
-    throw redirect({ to: "/consultor/$slug", params: { slug: params.slug }, replace: true });
+    const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+    const isConsultorSubdomain = hostname.startsWith("consultor.");
+
+    if (!isConsultorSubdomain) {
+      throw redirect({ to: "/consultor/$slug", params: { slug: params.slug }, replace: true });
+    }
   },
-  component: () => null,
+  component: ConsultorPage,
 });
