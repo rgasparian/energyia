@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="260" viewBox="0 0 980 260" role="img" aria-label="Parceiros e credenciais">
+  <rect width="980" height="260" rx="28" fill="#F5F5F5"/>
+  <text x="490" y="58" text-anchor="middle" font-family="Sora, Arial" font-size="28" font-weight="800" fill="#1A1A1A">Estrutura regulada, comercialização e suporte</text>
+  <g font-family="DM Sans, Arial" font-size="22" font-weight="800">
+    <rect x="58" y="104" width="195" height="82" rx="14" fill="#fff"/><text x="156" y="153" text-anchor="middle" fill="#1A1A1A">CCEE</text>
+    <rect x="284" y="104" width="195" height="82" rx="14" fill="#fff"/><text x="382" y="153" text-anchor="middle" fill="#1A1A1A">ANEEL</text>
+    <rect x="510" y="104" width="195" height="82" rx="14" fill="#fff"/><text x="608" y="153" text-anchor="middle" fill="#1A1A1A">Matrix</text>
+    <rect x="736" y="104" width="186" height="82" rx="14" fill="#fff"/><text x="829" y="153" text-anchor="middle" fill="#F57C00">EnergyIA</text>
+  </g>
+  <text x="490" y="224" text-anchor="middle" font-family="DM Sans, Arial" font-size="18" fill="#666">Modelo sem obra, sem placa solar e com desconto contratual</text>
+</svg>

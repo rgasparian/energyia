@@ -1,0 +1,131 @@
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Zap, Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { getSupabase } from "@/lib/supabase-browser";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/cadastro")({ component: Cadastro });
+
+function slugify(s: string) {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+function Cadastro() {
+  const navigate = useNavigate();
+  const { user, loading } = useAuth();
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [slug, setSlug] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user) navigate({ to: "/painel" });
+  }, [user, loading, navigate]);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      toast.error("A senha precisa ter pelo menos 6 caracteres");
+      return;
+    }
+    setSubmitting(true);
+    const supabase = await getSupabase();
+    const finalSlug = slug.trim() ? slugify(slug) : slugify(nome) || slugify(email.split("@")[0]);
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+        data: {
+          nome,
+          telefone,
+          slug: finalSlug,
+          role: "membro",
+        },
+      },
+    });
+    setSubmitting(false);
+    if (error) {
+      toast.error("Erro no cadastro: " + error.message);
+      return;
+    }
+    toast.success("Cadastro realizado! Verifique seu e-mail para confirmar.");
+    navigate({ to: "/login" });
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#FAFAFA] px-4 py-8">
+      <div className="w-full max-w-md">
+        <Link to="/" className="mb-8 flex items-center justify-center gap-2">
+          <Zap className="h-7 w-7 text-[#F57C00]" fill="#F57C00" />
+          <span className="text-2xl font-bold text-[#1A1A1A]">EnergyIA</span>
+        </Link>
+        <div className="rounded-xl border border-[#E0E0E0] bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-bold text-[#1A1A1A]">Cadastro de Afiliado</h1>
+          <p className="mt-1 text-sm text-[#666]">Crie sua conta e ganhe sua página personalizada</p>
+          <form onSubmit={onSubmit} className="mt-6 space-y-4">
+            <Field label="Nome completo" value={nome} onChange={setNome} required placeholder="Seu nome" />
+            <Field label="E-mail" type="email" value={email} onChange={setEmail} required placeholder="voce@email.com" />
+            <Field label="WhatsApp" value={telefone} onChange={setTelefone} placeholder="(11) 99999-9999" />
+            <div>
+              <Field
+                label="Slug da sua página (opcional)"
+                value={slug}
+                onChange={setSlug}
+                placeholder="seunome"
+              />
+              <p className="mt-1 text-xs text-[#666]">
+                Sua página será: <span className="font-mono">/consultor/{slug ? slugify(slug) : slugify(nome) || "seunome"}</span>
+              </p>
+            </div>
+            <Field label="Senha" type="password" value={password} onChange={setPassword} required placeholder="Mínimo 6 caracteres" />
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F57C00] py-3 text-sm font-semibold text-white transition hover:bg-[#E65100] disabled:opacity-60"
+            >
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Criar conta
+            </button>
+          </form>
+          <p className="mt-6 text-center text-xs text-[#666]">
+            Já tem conta?{" "}
+            <Link to="/login" className="font-semibold text-[#F57C00] hover:underline">
+              Entrar
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label, value, onChange, type = "text", required, placeholder,
+}: {
+  label: string; value: string; onChange: (v: string) => void;
+  type?: string; required?: boolean; placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-[#333]">{label}</label>
+      <input
+        type={type}
+        required={required}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-[#E0E0E0] px-4 py-2.5 text-sm focus:border-[#F57C00] focus:outline-none focus:ring-2 focus:ring-[#F57C00]/20"
+      />
+    </div>
+  );
+}
