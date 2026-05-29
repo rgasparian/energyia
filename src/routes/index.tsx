@@ -4,7 +4,7 @@ export const Route = createFileRoute("/")({ component: Home });
 
 // ↓↓↓ LINKS DE COMPRA — substitua o # pelo link real quando disponível
 const LINK_METODO = "#";       // Método EnergyIA R$17
-const LINK_COMBO  = "#";       // Combo Ferramentas R$197
+const LINK_FERRAMENTAS  = "#";       // Combo Ferramentas R$197
 
 function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -254,8 +254,8 @@ function Home() {
                 <div style={{fontSize:12,color:"rgba(255,255,255,0.35)",textDecoration:"line-through",marginBottom:4}}>De R$ 497,00</div>
                 <div className="syne" style={{fontSize:36,fontWeight:800,color:"#F57C00",lineHeight:1,marginBottom:4}}>R$ 197</div>
                 <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginBottom:20}}>ou 10 x R$ 19,70</div>
-                {/* ↓↓↓ LINK DE COMPRA — COMBO R$197 — substitua LINK_COMBO quando disponível */}
-                <a href={LINK_COMBO} style={{display:"block",width:"100%",padding:14,background:"#F57C00",color:"white",border:"none",borderRadius:10,fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,cursor:"pointer",textAlign:"center"}}>
+                {/* ↓↓↓ LINK DE COMPRA — COMBO R$197 — substitua LINK_FERRAMENTAS quando disponível */}
+                <a href={LINK_FERRAMENTAS} style={{display:"block",width:"100%",padding:14,background:"#F57C00",color:"white",border:"none",borderRadius:10,fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,cursor:"pointer",textAlign:"center"}}>
                   Quero por R$ 197
                 </a>
               </div>
