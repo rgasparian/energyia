@@ -1,1 +1,81 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { MatrixLayout } from "./matrix";
 
+export const Route = createFileRoute("/matrix/$slug")({
+  loader: async ({ params }) => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    if (!url || !key) return null;
+    const response = await fetch(
+      `${url}/rest/v1/usuarios_public?select=*&slug=eq.${encodeURIComponent(params.slug)}&limit=1`,
+      { headers: { apikey: key, authorization: `Bearer ${key}` } }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    return Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
+  },
+  component: MatrixSlugPage,
+});
+
+interface Consultor {
+  id: string; nome: string; slug: string; cidade?: string; foto_url?: string;
+  whatsapp?: string; email?: string;
+  link_ebook?: string; link_patrocinador?: string;
+  link_ferramentas?: string;
+}
+
+function MatrixSlugPage() {
+  const { slug } = Route.useParams();
+  const initial = Route.useLoaderData() as Consultor | null;
+  const [c, setC] = useState<Consultor | null>(initial);
+  const [notFound, setNotFound] = useState(!initial);
+
+  useEffect(() => {
+    if (initial) return;
+    (async () => {
+      try {
+        const url = import.meta.env.VITE_SUPABASE_URL;
+        const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const res = await fetch(
+          `${url}/rest/v1/usuarios_public?select=*&slug=eq.${encodeURIComponent(slug)}&limit=1`,
+          { headers: { apikey: key, authorization: `Bearer ${key}` } }
+        );
+        const data = await res.json();
+        const consultor = Array.isArray(data) ? data[0] : data;
+        if (consultor) setC(consultor as Consultor);
+        else setNotFound(true);
+      } catch { setNotFound(true); }
+    })();
+  }, [slug, initial]);
+
+  if (notFound) {
+    return (
+      <div style={{ display:"flex", minHeight:"100vh", alignItems:"center", justifyContent:"center", background:"#080808", color:"#fff", textAlign:"center", padding:24 }}>
+        <div>
+          <div style={{ fontSize:40, marginBottom:16 }}>⚡</div>
+          <h1 style={{ fontFamily:"'Outfit',sans-serif", fontSize:24, fontWeight:700 }}>Consultor não encontrado</h1>
+          <p style={{ color:"rgba(255,255,255,0.5)", marginTop:8 }}>Verifique o link e tente novamente.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!c) {
+    return (
+      <div style={{ display:"flex", minHeight:"100vh", alignItems:"center", justifyContent:"center", background:"#080808" }}>
+        <div style={{ width:32, height:32, border:"3px solid #F57C00", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 1s linear infinite" }}/>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    );
+  }
+
+  return (
+    <MatrixLayout
+      linkMetodo={c.link_ebook || "#"}
+      linkPatrocinador={c.link_patrocinador || "#"}
+      linkFerramentas={c.link_ferramentas || "#"}
+      consultor={{ nome: c.nome, foto_url: c.foto_url, cidade: c.cidade, whatsapp: c.whatsapp }}
+    />
+  );
+}
