@@ -15,7 +15,11 @@ interface Profile {
   pix?: string; slug: string; link_cta?: string;
   link_externo_1?: string; link_externo_2?: string;
   texto_cta?: string; headline?: string; subheadline?: string;
-  link_ebook?: string; link_patrocinador?: string; link_cliente?: string; link_guia?: string;
+  link_ebook?: string;
+  link_patrocinador?: string;
+  link_cliente?: string;
+  link_guia?: string;
+  link_ferramentas?: string;
   facebook?: string; youtube?: string;
 }
 
@@ -41,7 +45,6 @@ function Painel() {
       const supabase = await getSupabase();
       let { data: p } = await supabase.from("usuarios").select("*").eq("id", user.id).maybeSingle();
       if (!p) {
-        // Auto-cria perfil básico se não existir (ex.: usuário criado antes do trigger)
         const baseSlug = (user.email?.split("@")[0] || "user") + "-" + user.id.slice(0, 6);
         const { data: created, error: insErr } = await supabase
           .from("usuarios")
@@ -72,7 +75,6 @@ function Painel() {
     setSaving(true);
     const supabase = await getSupabase();
     const slug = slugify(profile.slug || profile.nome);
-    // Check slug uniqueness
     const { data: existing } = await supabase.from("usuarios").select("id").eq("slug", slug).neq("id", profile.id).maybeSingle();
     if (existing) {
       setSaving(false);
@@ -85,8 +87,11 @@ function Painel() {
       pix: profile.pix, slug, link_cta: profile.link_cta,
       link_externo_1: profile.link_externo_1, link_externo_2: profile.link_externo_2,
       texto_cta: profile.texto_cta, headline: profile.headline, subheadline: profile.subheadline,
-      link_ebook: profile.link_ebook, link_patrocinador: profile.link_patrocinador,
-      link_cliente: profile.link_cliente, link_guia: profile.link_guia,
+      link_ebook: profile.link_ebook,
+      link_patrocinador: profile.link_patrocinador,
+      link_cliente: profile.link_cliente,
+      link_guia: profile.link_guia,
+      link_ferramentas: profile.link_ferramentas,
       facebook: profile.facebook, youtube: profile.youtube,
     }).eq("id", profile.id);
     setSaving(false);
@@ -147,11 +152,23 @@ function Painel() {
         {/* Minhas páginas */}
         <section className="rounded-xl border border-[#E0E0E0] bg-white p-6 shadow-sm">
           <h2 className="mb-1 text-lg font-semibold text-[#1A1A1A]">Minhas páginas</h2>
-          <p className="mb-4 text-sm text-[#666]">Todas as páginas do sistema são automaticamente personalizadas com o seu slug <code className="rounded bg-[#FAFAFA] px-1.5 py-0.5">{profile.slug}</code>. Quando novos modelos forem publicados, eles aparecerão aqui automaticamente.</p>
+          <p className="mb-4 text-sm text-[#666]">
+            Todas as páginas do sistema são automaticamente personalizadas com o seu usuário{" "}
+            <code className="rounded bg-[#FAFAFA] px-1.5 py-0.5">{profile.slug}</code>.
+            Quando novos modelos forem publicados, eles aparecerão aqui automaticamente.
+          </p>
           <div className="space-y-3">
             {[
-              { nome: "Perfil simples", descricao: "Página de apresentação básica com seus contatos.", url: `${appUrl()}/${profile.slug}` },
-              { nome: "Página de captação (Energyia)", descricao: "Landing page completa com simulador, 3 ofertas e captura de leads.", url: `${appUrl()}/consultor/${profile.slug}` },
+              {
+                nome: "Página EnergyIA",
+                descricao: "Landing page de vendas do EnergyIA — Método R$17 e Combo Ferramentas R$197.",
+                url: `consultor.energyia.club/${profile.slug}`,
+              },
+              {
+                nome: "Página Matrix 360",
+                descricao: "Landing page exclusiva Matrix — Método R$17, Consultor Matrix R$249,90 e Combo Ferramentas R$197.",
+                url: `matrix.energyia.club/${profile.slug}`,
+              },
             ].map((p) => (
               <div key={p.url} className="rounded-lg border border-[#E0E0E0] bg-[#FAFAFA] p-4">
                 <div className="mb-2">
@@ -159,18 +176,63 @@ function Painel() {
                   <div className="text-xs text-[#666]">{p.descricao}</div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <code className="flex-1 rounded bg-white px-3 py-2 text-xs text-[#333] break-all border border-[#E0E0E0]">{p.url}</code>
-                  <button onClick={() => { navigator.clipboard.writeText(p.url); toast.success("Link copiado!"); }}
+                  <code className="flex-1 rounded bg-white px-3 py-2 text-xs text-[#333] break-all border border-[#E0E0E0]">
+                    https://{p.url}
+                  </code>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(`https://${p.url}`); toast.success("Link copiado!"); }}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-[#F57C00] px-3 py-2 text-xs font-semibold text-white hover:bg-[#E65100]">
                     <Copy className="h-3.5 w-3.5" /> Copiar
                   </button>
-                  <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-[#E0E0E0] bg-white px-3 py-2 text-xs font-medium text-[#333] hover:bg-[#FAFAFA]">
+                  <a href={`https://${p.url}`} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#E0E0E0] bg-white px-3 py-2 text-xs font-medium text-[#333] hover:bg-[#FAFAFA]">
                     <ExternalLink className="h-3.5 w-3.5" /> Abrir
                   </a>
                 </div>
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Links de compra */}
+        <section className="rounded-xl border border-[#E0E0E0] bg-white p-6 shadow-sm">
+          <h2 className="mb-1 text-lg font-semibold text-[#1A1A1A]">Links de compra</h2>
+          <p className="mb-4 text-sm text-[#666]">
+            Estes são os links que aparecem nos botões das suas páginas. Cada link deve ser o seu link de afiliado personalizado.
+          </p>
+          <div className="grid gap-4 md:grid-cols-1">
+
+            {/* Bloco visual explicativo */}
+            <div className="rounded-lg border border-[#E0E0E0] bg-[#FAFAFA] p-4 text-sm text-[#666] space-y-1">
+              <p><span className="font-semibold text-[#1A1A1A]">Opção 1 — Método EnergyIA R$17</span> → aparece nas páginas EnergyIA e Matrix</p>
+              <p><span className="font-semibold text-[#1A1A1A]">Opção 2 — Consultor Matrix R$249,90</span> → aparece somente na página Matrix</p>
+              <p><span className="font-semibold text-[#1A1A1A]">Opção 3 — Combo Ferramentas R$197</span> → aparece nas páginas EnergyIA e Matrix</p>
+            </div>
+
+            <Field
+              label='Opção 1 — Método EnergyIA R$17 · botão "Quero por R$ 17"'
+              value={profile.link_ebook || ""}
+              onChange={(v) => update("link_ebook", v)}
+              full
+            />
+            <Field
+              label='Opção 2 — Consultor Matrix R$249,90 · botão "Entrar como Consultor Matrix"'
+              value={profile.link_patrocinador || ""}
+              onChange={(v) => update("link_patrocinador", v)}
+              full
+            />
+            <Field
+              label='Opção 3 — Combo Ferramentas R$197 · botão "Quero por R$ 197"'
+              value={profile.link_ferramentas || ""}
+              onChange={(v) => update("link_ferramentas", v)}
+              full
+            />
+          </div>
+          <button onClick={save} disabled={saving}
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#F57C00] px-6 py-3 text-sm font-semibold text-white hover:bg-[#E65100] disabled:opacity-60">
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Salvar links
+          </button>
         </section>
 
         {/* Editar perfil */}
@@ -181,20 +243,17 @@ function Painel() {
             <Field label="WhatsApp (com DDI, ex: 5511999999999)" value={profile.whatsapp || ""} onChange={(v) => update("whatsapp", v)} />
             <Field label="Instagram (@handle)" value={profile.instagram || ""} onChange={(v) => update("instagram", v)} />
             <Field label="Cidade" value={profile.cidade || ""} onChange={(v) => update("cidade", v)} />
-            <Field label="PIX (chave)" value={profile.pix || ""} onChange={(v) => update("pix", v)} />
-            <Field label="Slug (URL personalizada)" value={profile.slug} onChange={(v) => update("slug", v)} />
-            <Field label="URL do vídeo (YouTube/Vimeo)" value={profile.video_url || ""} onChange={(v) => update("video_url", v)} full />
-            <Field label="Headline da página" value={profile.headline || ""} onChange={(v) => update("headline", v)} full />
-            <Field label="Subheadline da página" value={profile.subheadline || ""} onChange={(v) => update("subheadline", v)} full />
-            <Field label="Texto do botão CTA" value={profile.texto_cta || ""} onChange={(v) => update("texto_cta", v)} />
-            <Field label="Link CTA" value={profile.link_cta || ""} onChange={(v) => update("link_cta", v)} />
-            <Field label="Link extra 1" value={profile.link_externo_1 || ""} onChange={(v) => update("link_externo_1", v)} />
-            <Field label="Link extra 2" value={profile.link_externo_2 || ""} onChange={(v) => update("link_externo_2", v)} />
+            <Field label="Usuário (define sua URL personalizada)" value={profile.slug} onChange={(v) => update("slug", v)} />
+            <Field label="Telefone" value={profile.telefone || ""} onChange={(v) => update("telefone", v)} />
+            <Field label="Facebook (URL completa)" value={profile.facebook || ""} onChange={(v) => update("facebook", v)} />
+            <Field label="YouTube (URL completa)" value={profile.youtube || ""} onChange={(v) => update("youtube", v)} />
 
             <div className="md:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-[#333]">Foto de perfil</label>
               <div className="flex items-center gap-4">
-                {profile.foto_url && <img src={profile.foto_url} alt="" className="h-20 w-20 rounded-full border border-[#E0E0E0] object-cover" />}
+                {profile.foto_url && (
+                  <img src={profile.foto_url} alt="" className="h-20 w-20 rounded-full border border-[#E0E0E0] object-cover" />
+                )}
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#E0E0E0] px-4 py-2 text-sm font-medium text-[#333] hover:bg-[#FAFAFA]">
                   {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   {uploading ? "Enviando..." : "Enviar nova foto"}
@@ -206,38 +265,7 @@ function Painel() {
           <button onClick={save} disabled={saving}
             className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#F57C00] px-6 py-3 text-sm font-semibold text-white hover:bg-[#E65100] disabled:opacity-60">
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Salvar alterações
-          </button>
-        </section>
-
-        {/* Links da página de captação */}
-        <section className="rounded-xl border border-[#E0E0E0] bg-white p-6 shadow-sm">
-          <h2 className="mb-1 text-lg font-semibold text-[#1A1A1A]">Links da página de captação</h2>
-          <p className="mb-4 text-sm text-[#666]">Estes links substituem os placeholders <code>[LINK_PATROCINADOR]</code>, <code>[LINK_CLIENTE]</code>, etc. na sua landing page pública.</p>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Link do e-book / checkout (Opção 1 — INICIAR AGORA)" value={profile.link_ebook || ""} onChange={(v) => update("link_ebook", v)} full />
-            <Field label="Link do patrocinador / Matrix (Opção 2 — CONSULTOR MATRIX)" value={profile.link_patrocinador || ""} onChange={(v) => update("link_patrocinador", v)} full />
-            <Field label="Link do guia grátis (Opção 3 — BAIXAR GUIA)" value={profile.link_guia || ""} onChange={(v) => update("link_guia", v)} full />
-            <Field label="Link cadastro de cliente" value={profile.link_cliente || ""} onChange={(v) => update("link_cliente", v)} full />
-          </div>
-          <button onClick={save} disabled={saving}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#F57C00] px-6 py-3 text-sm font-semibold text-white hover:bg-[#E65100] disabled:opacity-60">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Salvar alterações
-          </button>
-        </section>
-
-        {/* Redes sociais */}
-        <section className="rounded-xl border border-[#E0E0E0] bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">Redes sociais (aparecem no rodapé)</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Facebook (URL completa)" value={profile.facebook || ""} onChange={(v) => update("facebook", v)} />
-            <Field label="YouTube (URL completa)" value={profile.youtube || ""} onChange={(v) => update("youtube", v)} />
-          </div>
-          <button onClick={save} disabled={saving}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#F57C00] px-6 py-3 text-sm font-semibold text-white hover:bg-[#E65100] disabled:opacity-60">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Salvar alterações
+            Salvar perfil
           </button>
         </section>
 
@@ -251,8 +279,10 @@ function Painel() {
               <table className="w-full text-sm">
                 <thead className="border-b border-[#E0E0E0] text-left text-xs uppercase text-[#666]">
                   <tr>
-                    <th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Telefone</th>
-                    <th className="py-2 pr-4">E-mail</th><th className="py-2">Data</th>
+                    <th className="py-2 pr-4">Nome</th>
+                    <th className="py-2 pr-4">Telefone</th>
+                    <th className="py-2 pr-4">E-mail</th>
+                    <th className="py-2">Data</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -278,8 +308,11 @@ function Field({ label, value, onChange, full }: { label: string; value: string;
   return (
     <div className={full ? "md:col-span-2" : ""}>
       <label className="mb-1.5 block text-sm font-medium text-[#333]">{label}</label>
-      <input value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm focus:border-[#F57C00] focus:outline-none focus:ring-2 focus:ring-[#F57C00]/20" />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm focus:border-[#F57C00] focus:outline-none focus:ring-2 focus:ring-[#F57C00]/20"
+      />
     </div>
   );
 }
