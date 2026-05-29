@@ -62,6 +62,13 @@ function rewriteForSubdomain(request: Request): Request {
     return new Request(url.toString(), request);
   }
 
+  // matrix.energyia.club/joao → /matrix/joao
+  if (hostname.startsWith("matrix.")) {
+    const newPath = "/matrix" + url.pathname;
+    url.pathname = newPath;
+    return new Request(url.toString(), request);
+  }
+
   // cliente.energyia.club/joao → /cliente/joao
   if (hostname.startsWith("cliente.")) {
     const newPath = "/cliente" + url.pathname;
