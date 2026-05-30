@@ -1,4 +1,14 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { ConsultorPage } from "./consultor.$slug";
+import { MatrixSlugPage } from "./matrix.$slug";
+
+function SlugComponent() {
+  if (typeof window === "undefined") return null;
+  const hostname = window.location.hostname;
+  if (hostname.startsWith("matrix.")) return <MatrixSlugPage />;
+  if (hostname.startsWith("consultor.")) return <ConsultorPage />;
+  return null;
+}
 
 export const Route = createFileRoute("/$slug")({
   beforeLoad: ({ params }) => {
@@ -11,5 +21,7 @@ export const Route = createFileRoute("/$slug")({
       replace: true,
     });
   },
-  component: () => null,
+  component: SlugComponent,
 });
+
+import React from "react";
