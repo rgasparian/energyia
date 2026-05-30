@@ -133,14 +133,14 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SlugRoute: typeof SlugRoute
+  MatrixRoute: typeof MatrixRoute
+  MatrixSlugRoute: typeof MatrixSlugRoute
+  ConsultorSlugRoute: typeof ConsultorSlugRoute
   AdminRoute: typeof AdminRoute
   CadastroRoute: typeof CadastroRoute
   LoginRoute: typeof LoginRoute
   PainelRoute: typeof PainelRoute
-  MatrixRoute: typeof MatrixRoute
-  ConsultorSlugRoute: typeof ConsultorSlugRoute
-  MatrixSlugRoute: typeof MatrixSlugRoute
+  SlugRoute: typeof SlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -213,14 +213,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SlugRoute: SlugRoute,
+  MatrixRoute: MatrixRoute,
+  MatrixSlugRoute: MatrixSlugRoute,
+  ConsultorSlugRoute: ConsultorSlugRoute,
   AdminRoute: AdminRoute,
   CadastroRoute: CadastroRoute,
   LoginRoute: LoginRoute,
   PainelRoute: PainelRoute,
-  MatrixRoute: MatrixRoute,
-  ConsultorSlugRoute: ConsultorSlugRoute,
-  MatrixSlugRoute: MatrixSlugRoute,
+  SlugRoute: SlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
