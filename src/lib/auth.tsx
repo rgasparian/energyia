@@ -21,51 +21,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role>(null);
   const [loading, setLoading] = useState(true);
 
+  const loadRole = async () => {
+    try {
+      const supabase = await getSupabase();
+      const { data, error } = await supabase.rpc("get_my_role");
+      if (error) {
+        console.error("Erro ao carregar role:", error);
+        setRole(null);
+        return;
+      }
+      if (data === "admin") setRole("admin");
+      else if (data) setRole("membro");
+      else setRole(null);
+    } catch (e) {
+      console.error("Exceção ao carregar role:", e);
+      setRole(null);
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
-    let unsubscribe: (() => void) | undefined;
 
     getSupabase().then((supabase) => {
       if (!mounted) return;
-
-      const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-        setSession(s);
-        setUser(s?.user ?? null);
-        if (s?.user) {
-          setTimeout(() => loadRole(s.user.id), 0);
-        } else {
-          setRole(null);
-        }
-      });
-
-      unsubscribe = () => sub.subscription.unsubscribe();
 
       supabase.auth.getSession().then(({ data }) => {
         if (!mounted) return;
         setSession(data.session);
         setUser(data.session?.user ?? null);
-        if (data.session?.user) loadRole(data.session.user.id);
-        setLoading(false);
+        if (data.session?.user) {
+          loadRole().finally(() => {
+            if (mounted) setLoading(false);
+          });
+        } else {
+          setLoading(false);
+        }
       });
+
+      const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+        setSession(s);
+        setUser(s?.user ?? null);
+        if (s?.user) {
+          loadRole();
+        } else {
+          setRole(null);
+        }
+      });
+
+      return () => sub.subscription.unsubscribe();
     });
 
-    return () => {
-      mounted = false;
-      unsubscribe?.();
-    };
+    return () => { mounted = false; };
   }, []);
-
-  const loadRole = async (uid: string) => {
-    const supabase = await getSupabase();
-    const { data } = await supabase
-      .from("usuarios")
-      .select("role")
-      .eq("id", uid)
-      .single();
-    if (data?.role === "admin") setRole("admin");
-    else if (data?.role) setRole("membro");
-    else setRole(null);
-  };
 
   const signIn = async (email: string, password: string) => {
     const supabase = await getSupabase();
@@ -76,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     const supabase = await getSupabase();
     await supabase.auth.signOut();
+    setRole(null);
   };
 
   return (
