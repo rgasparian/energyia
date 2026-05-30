@@ -8,25 +8,36 @@ export const Route = createFileRoute("/login")({ component: Login });
 
 function Login() {
   const navigate = useNavigate();
-  const { signIn, user, loading } = useAuth();
+  const { signIn, user, role, loading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Pega o parâmetro redirect da URL se existir
+  const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const redirectTo = search?.get("redirect") || null;
+
   useEffect(() => {
-    if (!loading && user) navigate({ to: "/painel" });
-  }, [user, loading, navigate]);
+    if (!loading && user && role !== null) {
+      if (redirectTo) {
+        navigate({ to: redirectTo as any });
+      } else if (role === "admin") {
+        navigate({ to: "/admin" });
+      } else {
+        navigate({ to: "/painel" });
+      }
+    }
+  }, [user, role, loading, navigate, redirectTo]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     const { error } = await signIn(email, password);
     setSubmitting(false);
-    if (error) toast.error("Erro ao entrar: " + error);
-    else {
-      toast.success("Login realizado!");
-      navigate({ to: "/painel" });
+    if (error) {
+      toast.error("Erro ao entrar: " + error);
     }
+    // Não navega aqui — o useEffect acima cuida do redirect após o role carregar
   };
 
   return (
