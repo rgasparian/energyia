@@ -160,12 +160,12 @@ function Painel() {
           <div className="space-y-3">
             {[
               {
-                nome: "Página EnergyIA",
-                descricao: "Landing page de vendas do EnergyIA — Método R$17 e Combo Ferramentas R$197.",
+                nome: "Página Captura de Consultores (Método + Consultor Matrix + Agenda)",
+                descricao: "Landing page de vendas do EnergyIA — Método R$17, Consultor Matrix R$249,90 e Agenda",
                 url: `energyia.club/consultor/${profile.slug}`,
               },
               {
-                nome: "Página Matrix 360",
+                nome: "Página Captura Consultores - Ferramentas - Matrix 360",
                 descricao: "Landing page exclusiva Matrix — Método R$17, Consultor Matrix R$249,90 e Combo Ferramentas R$197.",
                 url: `energyia.club/matrix/${profile.slug}`,
               },
