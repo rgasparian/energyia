@@ -50,18 +50,19 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 function rewriteForSubdomain(request: Request): Request {
   const url = new URL(request.url);
   const hostname = url.hostname;
-  if (hostname.startsWith("consultor.")) {
-    url.pathname = "/consultor" + url.pathname;
-    return new Request(url.toString(), request);
-  }
+
+  // matrix.energyia.club/joao → /matrix/joao
   if (hostname.startsWith("matrix.")) {
     url.pathname = "/matrix" + url.pathname;
     return new Request(url.toString(), request);
   }
+
+  // cliente.energyia.club/joao → /cliente/joao
   if (hostname.startsWith("cliente.")) {
     url.pathname = "/cliente" + url.pathname;
     return new Request(url.toString(), request);
   }
+
   return request;
 }
 
