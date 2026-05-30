@@ -3,22 +3,6 @@ import { useEffect, useState } from "react";
 import { MatrixLayout } from "./matrix";
 
 export const Route = createFileRoute("/matrix/$slug")({
-  loader: async ({ params }) => {
-    const url = import.meta.env.VITE_SUPABASE_URL;
-    const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    if (!url || !key) return null;
-    try {
-      const response = await fetch(
-        `${url}/rest/v1/usuarios_public?select=id,nome,slug,cidade,foto_url,whatsapp,email,telefone,link_ebook,link_patrocinador,link_ferramentas,ativo&slug=eq.${encodeURIComponent(params.slug)}&ativo=eq.true&limit=1`,
-        { headers: { apikey: key, authorization: `Bearer ${key}`, "Content-Type": "application/json" } }
-      );
-      if (!response.ok) return null;
-      const data = await response.json();
-      return Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
-    } catch {
-      return null;
-    }
-  },
   component: MatrixSlugPage,
 });
 
@@ -31,30 +15,27 @@ interface Consultor {
 
 export function MatrixSlugPage() {
   const { slug } = Route.useParams();
-  const initial = Route.useLoaderData() as Consultor | null;
-  const [c, setC] = useState<Consultor | null>(initial);
+  const [c, setC] = useState<Consultor | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    if (initial) {
-      setC(initial);
-      return;
-    }
     (async () => {
       try {
         const url = import.meta.env.VITE_SUPABASE_URL;
         const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const res = await fetch(
-          `${url}/rest/v1/usuarios_public?select=id,nome,slug,cidade,foto_url,whatsapp,email,telefone,link_ebook,link_patrocinador,link_ferramentas,ativo&slug=eq.${encodeURIComponent(slug)}&ativo=eq.true&limit=1`,
-          { headers: { apikey: key, authorization: `Bearer ${key}`, "Content-Type": "application/json" } }
+          `${url}/rest/v1/usuarios_public?select=id,nome,slug,cidade,foto_url,whatsapp,email,telefone,link_ebook,link_patrocinador,link_ferramentas&slug=eq.${encodeURIComponent(slug)}&ativo=eq.true&limit=1`,
+          { headers: { apikey: key, authorization: `Bearer ${key}` } }
         );
         const data = await res.json();
-        const consultor = Array.isArray(data) ? data[0] : data;
-        if (consultor) setC(consultor as Consultor);
+        const consultor = Array.isArray(data) ? data[0] : null;
+        if (consultor) setC(consultor);
         else setNotFound(true);
-      } catch { setNotFound(true); }
+      } catch {
+        setNotFound(true);
+      }
     })();
-  }, [slug, initial]);
+  }, [slug]);
 
   if (notFound) {
     return (
