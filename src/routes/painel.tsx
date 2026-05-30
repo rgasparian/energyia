@@ -162,12 +162,12 @@ function Painel() {
               {
                 nome: "Página EnergyIA",
                 descricao: "Landing page de vendas do EnergyIA — Método R$17 e Combo Ferramentas R$197.",
-                url: `consultor.energyia.club/${profile.slug}`,
+                url: `energyia.club/consultor/${profile.slug}`,
               },
               {
                 nome: "Página Matrix 360",
                 descricao: "Landing page exclusiva Matrix — Método R$17, Consultor Matrix R$249,90 e Combo Ferramentas R$197.",
-                url: `matrix.energyia.club/${profile.slug}`,
+                url: `energyia.club/matrix/${profile.slug}`,
               },
             ].map((p) => (
               <div key={p.url} className="rounded-lg border border-[#E0E0E0] bg-[#FAFAFA] p-4">
