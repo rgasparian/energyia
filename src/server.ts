@@ -25,11 +25,7 @@ function brandedErrorResponse(): Response {
 
 function isCatastrophicSsrErrorBody(body: string, responseStatus: number): boolean {
   let payload: unknown;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    return false;
-  }
+  try { payload = JSON.parse(body); } catch { return false; }
   if (!payload || Array.isArray(payload) || typeof payload !== "object") return false;
   const fields = payload as Record<string, unknown>;
   const expectedKeys = new Set(["message", "status", "unhandled"]);
@@ -51,40 +47,11 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
-function rewriteForSubdomain(request: Request): Request {
-  const url = new URL(request.url);
-  const hostname = url.hostname;
-
-  // consultor.energyia.club/joao → /consultor/joao
-  if (hostname.startsWith("consultor.")) {
-    const newPath = "/consultor" + url.pathname;
-    url.pathname = newPath;
-    return new Request(url.toString(), request);
-  }
-
-  // matrix.energyia.club/joao → /matrix/joao
-  if (hostname.startsWith("matrix.")) {
-    const newPath = "/matrix" + url.pathname;
-    url.pathname = newPath;
-    return new Request(url.toString(), request);
-  }
-
-  // cliente.energyia.club/joao → /cliente/joao
-  if (hostname.startsWith("cliente.")) {
-    const newPath = "/cliente" + url.pathname;
-    url.pathname = newPath;
-    return new Request(url.toString(), request);
-  }
-
-  return request;
-}
-
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
-      const rewritten = rewriteForSubdomain(request);
       const handler = await getServerEntry();
-      const response = await handler.fetch(rewritten, env, ctx);
+      const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
