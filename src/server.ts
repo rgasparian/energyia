@@ -47,11 +47,30 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+function rewriteForSubdomain(request: Request): Request {
+  const url = new URL(request.url);
+  const hostname = url.hostname;
+  if (hostname.startsWith("consultor.")) {
+    url.pathname = "/consultor" + url.pathname;
+    return new Request(url.toString(), request);
+  }
+  if (hostname.startsWith("matrix.")) {
+    url.pathname = "/matrix" + url.pathname;
+    return new Request(url.toString(), request);
+  }
+  if (hostname.startsWith("cliente.")) {
+    url.pathname = "/cliente" + url.pathname;
+    return new Request(url.toString(), request);
+  }
+  return request;
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const rewritten = rewriteForSubdomain(request);
       const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
+      const response = await handler.fetch(rewritten, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
