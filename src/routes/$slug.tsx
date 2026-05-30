@@ -1,12 +1,6 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
+// Rota vazia — o server.ts já cuida do roteamento por subdomínio
 export const Route = createFileRoute("/$slug")({
-  beforeLoad: ({ params }) => {
-    throw redirect({
-      to: "/consultor/$slug",
-      params: { slug: params.slug },
-      replace: true,
-    });
-  },
   component: () => null,
 });
