@@ -1,27 +1,22 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { ConsultorPage } from "./consultor.$slug";
-import { MatrixSlugPage } from "./matrix.$slug";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 
-function SlugComponent() {
-  if (typeof window === "undefined") return null;
-  const hostname = window.location.hostname;
-  if (hostname.startsWith("matrix.")) return <MatrixSlugPage />;
-  if (hostname.startsWith("consultor.")) return <ConsultorPage />;
+function SlugRedirect() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hostname = window.location.hostname;
+    const slug = window.location.pathname.replace("/", "");
+    if (hostname.startsWith("consultor.")) {
+      window.location.replace(`/consultor/${slug}`);
+    } else if (hostname.startsWith("matrix.")) {
+      window.location.replace(`/matrix/${slug}`);
+    }
+  }, []);
   return null;
 }
 
 export const Route = createFileRoute("/$slug")({
-  beforeLoad: ({ params }) => {
-    if (typeof window === "undefined") return;
-    const hostname = window.location.hostname;
-    if (hostname.startsWith("consultor.") || hostname.startsWith("matrix.")) return;
-    throw redirect({
-      to: "/consultor/$slug",
-      params: { slug: params.slug },
-      replace: true,
-    });
-  },
-  component: SlugComponent,
+  component: SlugRedirect,
 });
 
 import React from "react";
