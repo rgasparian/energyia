@@ -29,14 +29,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
 
       const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        setTimeout(() => loadRole(s.user.id), 0);
-      } else {
-        setRole(null);
-      }
+        setSession(s);
+        setUser(s?.user ?? null);
+        if (s?.user) {
+          setTimeout(() => loadRole(s.user.id), 0);
+        } else {
+          setRole(null);
+        }
       });
+
       unsubscribe = () => sub.subscription.unsubscribe();
 
       supabase.auth.getSession().then(({ data }) => {
@@ -57,11 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadRole = async (uid: string) => {
     const supabase = await getSupabase();
     const { data } = await supabase
-      .from("user_roles")
+      .from("usuarios")
       .select("role")
-      .eq("user_id", uid);
-    if (data?.some((r) => r.role === "admin")) setRole("admin");
-    else if (data && data.length) setRole("membro");
+      .eq("id", uid)
+      .single();
+    if (data?.role === "admin") setRole("admin");
+    else if (data?.role) setRole("membro");
     else setRole(null);
   };
 
