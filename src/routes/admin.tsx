@@ -25,13 +25,14 @@ function Admin() {
   const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
-    // Só redireciona quando loading terminou E role já foi resolvido (não é null)
-    if (!loading && role !== null) {
-      if (!user) navigate({ to: "/login" });
-      else if (role !== "admin") navigate({ to: "/painel" });
+    if (!loading) {
+      if (!user) {
+        // Passa o redirect para voltar ao /admin após o login
+        navigate({ to: "/login", search: { redirect: "/admin" } as any });
+      } else if (role !== null && role !== "admin") {
+        navigate({ to: "/painel" });
+      }
     }
-    // Se não tem user e loading terminou, manda pro login
-    if (!loading && !user) navigate({ to: "/login" });
   }, [user, role, loading, navigate]);
 
   const load = async () => {
@@ -63,12 +64,11 @@ function Admin() {
     URL.revokeObjectURL(url);
   };
 
-  // Mostra loading enquanto ainda está carregando OU enquanto role ainda não chegou
+  // Mostra loading enquanto carrega ou enquanto role ainda não chegou
   if (loading || role === null) {
     return <div className="flex min-h-screen items-center justify-center bg-[#FAFAFA]"><Loader2 className="h-6 w-6 animate-spin text-[#F57C00]" /></div>;
   }
 
-  // Se chegou aqui com role diferente de admin, não renderiza nada (o redirect já foi disparado)
   if (role !== "admin") return null;
 
   return (
