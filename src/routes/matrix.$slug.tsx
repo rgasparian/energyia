@@ -7,13 +7,17 @@ export const Route = createFileRoute("/matrix/$slug")({
     const url = import.meta.env.VITE_SUPABASE_URL;
     const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     if (!url || !key) return null;
-    const response = await fetch(
-      `${url}/rest/v1/usuarios_public?select=*&slug=eq.${encodeURIComponent(params.slug)}&limit=1`,
-      { headers: { apikey: key, authorization: `Bearer ${key}` } }
-    );
-    if (!response.ok) return null;
-    const data = await response.json();
-    return Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
+    try {
+      const response = await fetch(
+        `${url}/rest/v1/usuarios_public?select=id,nome,slug,cidade,foto_url,whatsapp,email,telefone,link_ebook,link_patrocinador,link_ferramentas,ativo&slug=eq.${encodeURIComponent(params.slug)}&ativo=eq.true&limit=1`,
+        { headers: { apikey: key, authorization: `Bearer ${key}`, "Content-Type": "application/json" } }
+      );
+      if (!response.ok) return null;
+      const data = await response.json();
+      return Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
+    } catch {
+      return null;
+    }
   },
   component: MatrixSlugPage,
 });
@@ -29,17 +33,20 @@ export function MatrixSlugPage() {
   const { slug } = Route.useParams();
   const initial = Route.useLoaderData() as Consultor | null;
   const [c, setC] = useState<Consultor | null>(initial);
-  const [notFound, setNotFound] = useState(!initial);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    if (initial) return;
+    if (initial) {
+      setC(initial);
+      return;
+    }
     (async () => {
       try {
         const url = import.meta.env.VITE_SUPABASE_URL;
         const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const res = await fetch(
-          `${url}/rest/v1/usuarios_public?select=*&slug=eq.${encodeURIComponent(slug)}&limit=1`,
-          { headers: { apikey: key, authorization: `Bearer ${key}` } }
+          `${url}/rest/v1/usuarios_public?select=id,nome,slug,cidade,foto_url,whatsapp,email,telefone,link_ebook,link_patrocinador,link_ferramentas,ativo&slug=eq.${encodeURIComponent(slug)}&ativo=eq.true&limit=1`,
+          { headers: { apikey: key, authorization: `Bearer ${key}`, "Content-Type": "application/json" } }
         );
         const data = await res.json();
         const consultor = Array.isArray(data) ? data[0] : data;
