@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { getSupabase } from "@/lib/supabase-browser";
 import { cleanPhone } from "@/lib/utils-energyia";
-import { Loader2, Zap, MessageCircle, ChevronDown, Menu, X, Calendar, Sparkles, RefreshCw, Trophy, Users, TrendingUp, Clock } from "lucide-react";
+import { Zap, MessageCircle, ChevronDown, Menu, X, Calendar, Sparkles, RefreshCw, Trophy, Users, TrendingUp, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/consultor/$slug")({
   loader: async ({ params }) => {
@@ -36,27 +35,8 @@ const IMG = {
 };
 
 function ConsultorPage() {
-  const { slug } = Route.useParams();
-  const initialConsultor = Route.useLoaderData();
-  const [c, setC] = useState<Consultor | null>(initialConsultor);
-  const [notFound, setNotFound] = useState(!initialConsultor);
+  const c = Route.useLoaderData();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const supabase = await getSupabase();
-        const { data } = await supabase.from("usuarios_public" as never).select("*").eq("slug", slug).limit(1);
-        const consultant = Array.isArray(data) ? data[0] : data;
-        if (cancelled) return;
-        if (consultant) setC(consultant as Consultor); else setNotFound(true);
-      } catch {
-        if (!cancelled) setNotFound(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [slug]);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -66,7 +46,7 @@ function ConsultorPage() {
     return () => { document.head.removeChild(link); };
   }, []);
 
-  if (notFound) {
+  if (!c) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#1A1A1A] px-4 text-center text-white" style={{ fontFamily: "DM Sans, sans-serif" }}>
         <div>
@@ -75,9 +55,6 @@ function ConsultorPage() {
         </div>
       </div>
     );
-  }
-  if (!c) {
-    return <div className="flex min-h-screen items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin text-[#F57C00]" /></div>;
   }
 
   const wa = cleanPhone(c.whatsapp || "");
@@ -437,7 +414,6 @@ function Simulador({ linkPatrocinador }: { linkPatrocinador: string }) {
     const recorrMes1 = recorrenciaUnit * clientes;
     const totalMes1 = conexaoMes1 + recorrMes1 + bonus;
 
-    // 12 meses (você sozinho): carteira cresce - clientes novos por mês
     let conexao12 = 0, recorr12 = 0, bonus12 = 0;
     for (let m = 1; m <= 12; m++) {
       conexao12 += conexaoUnit * clientes;
@@ -446,7 +422,6 @@ function Simulador({ linkPatrocinador }: { linkPatrocinador: string }) {
     }
     const total12 = conexao12 + recorr12 + bonus12;
 
-    // Time
     const expansao = consultores * 100;
     const ativacao = consultores * 30;
     const clientesTime = clientes * consultores;
@@ -464,14 +439,12 @@ function Simulador({ linkPatrocinador }: { linkPatrocinador: string }) {
 
   return (
     <div className="overflow-hidden rounded-2xl shadow-2xl">
-      {/* HEADER */}
       <div className="bg-[#1A1A1A] p-7 text-white">
         <span className="inline-block rounded-full border border-[#F57C00]/30 bg-[#F57C00]/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-[#F57C00]">Simulador de Comissão</span>
         <h3 className="mt-3 text-2xl font-extrabold" style={{ fontFamily: "Sora, sans-serif" }}>Quanto você pode ganhar como Consultor Matrix?</h3>
         <p className="mt-2 text-sm text-white/50">Ajuste os sliders abaixo. Valores calculados com <strong className="text-white/80">regras reais do plano de comissão</strong>.</p>
       </div>
 
-      {/* TABS */}
       <div className="grid grid-cols-3 gap-1 bg-[#111] p-1">
         {[["mes1", "1º Mês"], ["ano", "12 Meses"], ["time", "Com Time"]].map(([k, l]) => (
           <button key={k} onClick={() => setTab(k as "mes1" | "ano" | "time")}
@@ -481,14 +454,12 @@ function Simulador({ linkPatrocinador }: { linkPatrocinador: string }) {
         ))}
       </div>
 
-      {/* SLIDERS */}
       <div className="space-y-5 bg-white p-6 md:p-8">
         <SliderRow label="Conta média (R$)" value={fmt(conta)} min={100} max={2000} step={50} current={conta} setValue={setConta} fmtMin="R$ 100" fmtMax="R$ 2.000" />
         <SliderRow label="Clientes no mês" value={`${clientes} clientes`} min={1} max={30} step={1} current={clientes} setValue={setClientes} fmtMin="1" fmtMax="30" />
         <SliderRow label="Consultores no time" value={`${consultores} consultores`} min={1} max={20} step={1} current={consultores} setValue={setConsultores} fmtMin="1" fmtMax="20" />
       </div>
 
-      {/* RESULT */}
       <div className="bg-[#F57C00] p-7 text-center text-white">
         <p className="text-xs font-bold uppercase tracking-widest text-white/70">{resultLabel}</p>
         <p className="my-2 text-5xl font-black md:text-6xl">{fmt(resultValue)}</p>
@@ -499,7 +470,6 @@ function Simulador({ linkPatrocinador }: { linkPatrocinador: string }) {
         </div>
       </div>
 
-      {/* BREAKDOWN */}
       <div className="bg-white p-6 md:p-8">
         {tab === "mes1" && (
           <div className="mx-auto max-w-md rounded-lg border border-[#F57C00] p-5">
@@ -547,7 +517,6 @@ function Simulador({ linkPatrocinador }: { linkPatrocinador: string }) {
         )}
       </div>
 
-      {/* NOTES */}
       <div className="border-t bg-white p-4 text-xs leading-relaxed text-[#aaa]">
         * Simulação baseada nas regras do plano de comissão Matrix. Comissão de conexão = 60% do valor faturável (85% da conta). Recorrência = 1% ao mês por cliente ativo. Bônus de volume: 1 cliente=R$200, 2=R$500, 4+=R$1.200. Override de rede: 4% conexão + 3% recorrência indireta. Bônus expansão R$100/consultor (mês 1) + ativação R$30/mês. Valores estimados.
       </div>
@@ -594,4 +563,3 @@ function FaqItem({ q, a }: { q: string; a: string }) {
     </div>
   );
 }
-
