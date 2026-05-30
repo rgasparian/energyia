@@ -25,7 +25,7 @@ interface Consultor {
   link_ferramentas?: string;
 }
 
-function MatrixSlugPage() {
+export function MatrixSlugPage() {
   const { slug } = Route.useParams();
   const initial = Route.useLoaderData() as Consultor | null;
   const [c, setC] = useState<Consultor | null>(initial);
