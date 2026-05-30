@@ -6,6 +6,7 @@ function getBasePath(): string {
   if (typeof window === "undefined") return "";
   const hostname = window.location.hostname;
   if (hostname.startsWith("consultor.")) return "/consultor";
+  if (hostname.startsWith("matrix.")) return "/matrix";
   if (hostname.startsWith("cliente.")) return "/cliente";
   return "";
 }
