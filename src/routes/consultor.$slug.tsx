@@ -34,7 +34,7 @@ const IMG = {
   marcas2: "/energyia-marcas-2.svg",
 };
 
-function ConsultorPage() {
+export function ConsultorPage() {
   const c = Route.useLoaderData();
   const [menuOpen, setMenuOpen] = useState(false);
 
