@@ -1,20 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
-
-function SlugRedirect() {
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const slug = window.location.pathname.replace(/^\//, "");
-    if (!slug) return;
-    // Com basepath ativo, navega para /$slug que o router resolve
-    // O basepath já cuida do prefixo correto
-    window.history.replaceState(null, "", window.location.href);
-  }, []);
-  return null;
-}
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/$slug")({
-  component: SlugRedirect,
+  beforeLoad: ({ params }) => {
+    if (typeof window === "undefined") return;
+    const hostname = window.location.hostname;
+    if (hostname.startsWith("consultor.")) {
+      throw redirect({ to: "/consultor/$slug", params, replace: true });
+    }
+    if (hostname.startsWith("matrix.")) {
+      throw redirect({ to: "/matrix/$slug", params, replace: true });
+    }
+  },
+  component: () => null,
 });
-
-import React from "react";
