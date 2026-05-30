@@ -13,31 +13,31 @@ function Login() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Pega o parâmetro redirect da URL se existir
   const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const redirectTo = search?.get("redirect") || null;
 
+  // Redireciona quando já está logado E o role já carregou
   useEffect(() => {
     if (!loading && user && role !== null) {
       if (redirectTo) {
-        navigate({ to: redirectTo as any });
+        window.location.href = redirectTo;
       } else if (role === "admin") {
-        navigate({ to: "/admin" });
+        window.location.href = "/admin";
       } else {
-        navigate({ to: "/painel" });
+        window.location.href = "/painel";
       }
     }
-  }, [user, role, loading, navigate, redirectTo]);
+  }, [user, role, loading, redirectTo]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     const { error } = await signIn(email, password);
-    setSubmitting(false);
     if (error) {
+      setSubmitting(false);
       toast.error("Erro ao entrar: " + error);
     }
-    // Não navega aqui — o useEffect acima cuida do redirect após o role carregar
+    // Não navega aqui — o useEffect acima cuida após o role carregar
   };
 
   return (
@@ -72,7 +72,7 @@ function Login() {
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F57C00] py-3 text-sm font-semibold text-white transition hover:bg-[#E65100] disabled:opacity-60"
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Entrar
+              {submitting ? "Entrando..." : "Entrar"}
             </button>
           </form>
           <p className="mt-6 text-center text-xs text-[#666]">
