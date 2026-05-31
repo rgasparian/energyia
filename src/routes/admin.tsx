@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { Zap, Loader2, Plus, ArrowLeft, Download, X } from "lucide-react";
+import { Zap, Loader2, Plus, ArrowLeft, Download, X, ToggleLeft, ToggleRight } from "lucide-react";
 import { slugify } from "@/lib/utils-energyia";
 import { getSupabase } from "@/lib/supabase-browser";
 
@@ -23,11 +23,11 @@ function Admin() {
   const [leads, setLeads] = useState<LeadFull[]>([]);
   const [tab, setTab] = useState<"membros" | "leads">("membros");
   const [showCreate, setShowCreate] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        // Passa o redirect para voltar ao /admin após o login
         navigate({ to: "/login", search: { redirect: "/admin" } as any });
       } else if (role !== null && role !== "admin") {
         navigate({ to: "/painel" });
@@ -46,10 +46,23 @@ function Admin() {
   useEffect(() => { if (role === "admin") load(); }, [role]);
 
   const toggleAtivo = async (m: Membro) => {
+    const novoStatus = !m.ativo;
+    const confirmMsg = novoStatus
+      ? `Ativar ${m.nome}? Ele voltará a ter acesso ao sistema.`
+      : `Desativar ${m.nome}? Ele perderá o acesso ao sistema.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setToggling(m.id);
     const supabase = await getSupabase();
-    await supabase.from("usuarios").update({ ativo: !m.ativo }).eq("id", m.id);
-    toast.success(`Membro ${!m.ativo ? "ativado" : "desativado"}`);
-    load();
+    const { error } = await supabase.from("usuarios").update({ ativo: novoStatus }).eq("id", m.id);
+    setToggling(null);
+
+    if (error) {
+      toast.error("Erro ao atualizar status: " + error.message);
+    } else {
+      toast.success(`${m.nome} foi ${novoStatus ? "ativado" : "desativado"} com sucesso.`);
+      load();
+    }
   };
 
   const exportCsv = () => {
@@ -64,12 +77,14 @@ function Admin() {
     URL.revokeObjectURL(url);
   };
 
-  // Mostra loading enquanto carrega ou enquanto role ainda não chegou
   if (loading || role === null) {
     return <div className="flex min-h-screen items-center justify-center bg-[#FAFAFA]"><Loader2 className="h-6 w-6 animate-spin text-[#F57C00]" /></div>;
   }
 
   if (role !== "admin") return null;
+
+  const ativos = membros.filter(m => m.ativo).length;
+  const inativos = membros.filter(m => !m.ativo).length;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
@@ -101,7 +116,13 @@ function Admin() {
         {tab === "membros" && (
           <section className="rounded-xl border border-[#E0E0E0] bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1A1A1A]">Membros</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-[#1A1A1A]">Membros</h2>
+                <p className="mt-0.5 text-xs text-[#666]">
+                  <span className="font-medium text-[#2E7D32]">{ativos} ativos</span>
+                  {inativos > 0 && <span className="ml-2 font-medium text-[#C62828]">{inativos} inativos</span>}
+                </p>
+              </div>
               <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#F57C00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#E65100]">
                 <Plus className="h-4 w-4" /> Criar novo membro
               </button>
@@ -109,23 +130,45 @@ function Admin() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b border-[#E0E0E0] text-left text-xs uppercase text-[#666]">
-                  <tr><th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Slug</th><th className="py-2 pr-4">E-mail</th>
-                    <th className="py-2 pr-4">Telefone</th><th className="py-2 pr-4">Status</th><th className="py-2">Cadastro</th></tr>
+                  <tr>
+                    <th className="py-2 pr-4">Nome</th>
+                    <th className="py-2 pr-4">Slug</th>
+                    <th className="py-2 pr-4">E-mail</th>
+                    <th className="py-2 pr-4">Telefone</th>
+                    <th className="py-2 pr-4">Cadastro</th>
+                    <th className="py-2 text-center">Acesso</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {membros.map((m) => (
-                    <tr key={m.id} className="border-b border-[#E0E0E0]/50">
-                      <td className="py-2.5 pr-4 font-medium">{m.nome}</td>
-                      <td className="py-2.5 pr-4 text-[#666]">/{m.slug}</td>
-                      <td className="py-2.5 pr-4">{m.email}</td>
-                      <td className="py-2.5 pr-4">{m.telefone || "-"}</td>
-                      <td className="py-2.5 pr-4">
-                        <button onClick={() => toggleAtivo(m)}
-                          className={`rounded-full px-3 py-0.5 text-xs font-semibold ${m.ativo ? "bg-[#2E7D32]/10 text-[#2E7D32]" : "bg-[#C62828]/10 text-[#C62828]"}`}>
+                    <tr key={m.id} className={`border-b border-[#E0E0E0]/50 transition ${!m.ativo ? "opacity-50" : ""}`}>
+                      <td className="py-3 pr-4 font-medium">{m.nome}</td>
+                      <td className="py-3 pr-4 font-mono text-xs text-[#666]">/{m.slug}</td>
+                      <td className="py-3 pr-4">{m.email}</td>
+                      <td className="py-3 pr-4">{m.telefone || "-"}</td>
+                      <td className="py-3 pr-4 text-[#666]">{new Date(m.created_at).toLocaleDateString("pt-BR")}</td>
+                      <td className="py-3 text-center">
+                        <button
+                          onClick={() => toggleAtivo(m)}
+                          disabled={toggling === m.id}
+                          title={m.ativo ? "Clique para desativar" : "Clique para ativar"}
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
+                          style={{
+                            background: m.ativo ? "#2E7D3215" : "#C6282815",
+                            color: m.ativo ? "#2E7D32" : "#C62828",
+                            border: `1px solid ${m.ativo ? "#2E7D3240" : "#C6282840"}`,
+                          }}
+                        >
+                          {toggling === m.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : m.ativo ? (
+                            <ToggleRight className="h-3.5 w-3.5" />
+                          ) : (
+                            <ToggleLeft className="h-3.5 w-3.5" />
+                          )}
                           {m.ativo ? "Ativo" : "Inativo"}
                         </button>
                       </td>
-                      <td className="py-2.5 text-[#666]">{new Date(m.created_at).toLocaleDateString("pt-BR")}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -145,8 +188,13 @@ function Admin() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b border-[#E0E0E0] text-left text-xs uppercase text-[#666]">
-                  <tr><th className="py-2 pr-4">Nome</th><th className="py-2 pr-4">Telefone</th><th className="py-2 pr-4">E-mail</th>
-                    <th className="py-2 pr-4">Membro origem</th><th className="py-2">Data</th></tr>
+                  <tr>
+                    <th className="py-2 pr-4">Nome</th>
+                    <th className="py-2 pr-4">Telefone</th>
+                    <th className="py-2 pr-4">E-mail</th>
+                    <th className="py-2 pr-4">Membro origem</th>
+                    <th className="py-2">Data</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {leads.map((l) => {
