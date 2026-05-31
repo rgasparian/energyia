@@ -54,14 +54,23 @@ function Admin() {
 
     setToggling(m.id);
     const supabase = await getSupabase();
-    const { error } = await supabase.from("usuarios").update({ ativo: novoStatus }).eq("id", m.id);
+    const { error, data } = await supabase
+      .from("usuarios")
+      .update({ ativo: novoStatus })
+      .eq("id", m.id)
+      .select();
+
     setToggling(null);
+    console.log("toggleAtivo →", { error, data, id: m.id, novoStatus });
 
     if (error) {
       toast.error("Erro ao atualizar status: " + error.message);
+    } else if (!data || data.length === 0) {
+      toast.error("Atualização bloqueada pelo banco. Verifique as políticas RLS.");
     } else {
-      toast.success(`${m.nome} foi ${novoStatus ? "ativado" : "desativado"} com sucesso.`);
-      load();
+      // Atualiza estado local imediatamente sem precisar recarregar
+      setMembros(prev => prev.map(item => item.id === m.id ? { ...item, ativo: novoStatus } : item));
+      toast.success(`${m.nome} foi ${novoStatus ? "ativado ✅" : "desativado 🔴"} com sucesso.`);
     }
   };
 
