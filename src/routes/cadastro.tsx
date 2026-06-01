@@ -17,6 +17,17 @@ function slugify(s: string) {
     .slice(0, 40);
 }
 
+function traduzirErro(msg: string): string {
+  if (msg.includes("User already registered")) return "Este e-mail já está cadastrado.";
+  if (msg.includes("Email not confirmed")) return "Você precisa confirmar seu e-mail antes de entrar. Verifique sua caixa de entrada.";
+  if (msg.includes("Invalid login credentials")) return "E-mail ou senha incorretos.";
+  if (msg.includes("Password should be at least")) return "A senha precisa ter pelo menos 6 caracteres.";
+  if (msg.includes("duplicate key") && msg.includes("slug")) return "Este slug já está em uso. Escolha outro nome para sua página.";
+  if (msg.includes("duplicate key")) return "Já existe um cadastro com esses dados.";
+  if (msg.includes("Unable to validate email address")) return "E-mail inválido. Verifique o endereço digitado.";
+  return msg;
+}
+
 function Cadastro() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -34,7 +45,7 @@ function Cadastro() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
-      toast.error("A senha precisa ter pelo menos 6 caracteres");
+      toast.error("A senha precisa ter pelo menos 6 caracteres.");
       return;
     }
     setSubmitting(true);
@@ -44,7 +55,7 @@ function Cadastro() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: `https://energyia.club/painel`,
         data: {
           nome,
           telefone,
@@ -55,10 +66,10 @@ function Cadastro() {
     });
     setSubmitting(false);
     if (error) {
-      toast.error("Erro no cadastro: " + error.message);
+      toast.error(traduzirErro(error.message));
       return;
     }
-    toast.success("Cadastro realizado! Verifique seu e-mail para confirmar.");
+    toast.success("Cadastro realizado! Verifique seu e-mail e clique no link de confirmação para acessar sua área.");
     navigate({ to: "/login" });
   };
 
