@@ -89,7 +89,7 @@ function Cadastro() {
             <Field label="WhatsApp" value={telefone} onChange={setTelefone} placeholder="(11) 99999-9999" />
             <div>
               <Field
-                label="Slug da sua página (opcional)"
+                label="Usuário da sua página (opcional)"
                 value={slug}
                 onChange={setSlug}
                 placeholder="seunome"
