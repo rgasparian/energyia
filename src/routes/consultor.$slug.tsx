@@ -64,6 +64,7 @@ export function ConsultorPage() {
   const matrixLink = c.usuario_matrix
     ? `https://escritorio.matrix360.com.br/${c.usuario_matrix}`
     : "https://escritorio.matrix360.com.br/";
+  const ebookLink = c.link_ebook || "https://pay.hotmart.com/E105718812K";
 
   return (
     <div style={{ fontFamily: "DM Sans, sans-serif", color: "#1A1A1A" }} className="bg-white">
@@ -267,7 +268,7 @@ export function ConsultorPage() {
                     <li key={it} className="flex gap-2"><span className="text-green-600">✓</span>{it}</li>
                   ))}
                 </ul>
-                <a href={c.link_ebook} target="_blank" rel="noreferrer" className="mt-6 block rounded-lg bg-[#F57C00] py-3 text-center text-sm font-bold text-white hover:bg-[#E65100]">
+                <a href={ebookLink} target="_blank" rel="noreferrer" className="mt-6 block rounded-lg bg-[#F57C00] py-3 text-center text-sm font-bold text-white hover:bg-[#E65100]">
                   INICIAR AGORA POR R$ 17
                 </a>
               </div>
