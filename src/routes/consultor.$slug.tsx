@@ -65,6 +65,8 @@ export function ConsultorPage() {
     ? `https://escritorio.matrix360.com.br/${c.usuario_matrix}`
     : "https://escritorio.matrix360.com.br/";
   const ebookLink = c.link_ebook || "https://pay.hotmart.com/E105718812K";
+  const guiaLink = c.link_guia || "https://drive.google.com/file/d/1o5XMzN3-PO_jRbgAbSAThl-bCuuWYApV/view?usp=drive_link";
+  const ferramentasLink = c.link_ferramentas || "https://go.hotmart.com/S106094049W";
 
   return (
     <div style={{ fontFamily: "DM Sans, sans-serif", color: "#1A1A1A" }} className="bg-white">
@@ -309,7 +311,7 @@ export function ConsultorPage() {
                 <a href={whatsappLink} target="_blank" rel="noreferrer" className="mt-6 block rounded-lg border-2 border-[#F57C00] py-3 text-sm font-bold text-[#F57C00] hover:bg-[#fff8f4]">
                   → AGENDAR CONVERSA ←
                 </a>
-                <a href={c.link_guia} target="_blank" rel="noreferrer" className="mt-3 block rounded-lg border border-[#F57C00] bg-black py-3 text-sm font-bold text-white">
+                <a href={guiaLink} target="_blank" rel="noreferrer" className="mt-3 block rounded-lg border border-[#F57C00] bg-black py-3 text-sm font-bold text-white">
                   → BAIXAR GUIA GRÁTIS ←
                 </a>
               </div>
