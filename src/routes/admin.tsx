@@ -9,7 +9,7 @@ import { getSupabase } from "@/lib/supabase-browser";
 export const Route = createFileRoute("/admin")({ component: Admin });
 
 interface Membro {
-  id: string; nome: string; email: string; telefone?: string; slug: string; ativo: boolean; created_at: string; role?: string;
+  id: string; nome: string; email: string; telefone?: string; slug: string; ativo: boolean; created_at: string; role?: string; usuario_matrix?: string;
 }
 interface LeadFull {
   id: string; nome: string; telefone: string; email?: string;
@@ -38,7 +38,7 @@ function Admin() {
 
   const load = async () => {
     const supabase = await getSupabase();
-    const { data: m } = await supabase.from("usuarios").select("id,nome,email,telefone,slug,ativo,created_at,role").order("created_at", { ascending: false });
+    const { data: m } = await supabase.from("usuarios").select("id,nome,email,telefone,slug,ativo,created_at,role,usuario_matrix").order("created_at", { ascending: false });
     setMembros((m as Membro[]) ?? []);
     const { data: l } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
     setLeads((l as LeadFull[]) ?? []);
@@ -145,6 +145,7 @@ function Admin() {
                     <th className="py-2 pr-4">Usuário</th>
                     <th className="py-2 pr-4">E-mail</th>
                     <th className="py-2 pr-4">Telefone</th>
+                    <th className="py-2 pr-4">Matrix</th>
                     <th className="py-2 pr-4">Cadastro</th>
                     <th className="py-2 text-center">Acesso</th>
                     <th className="py-2 text-center">Ações</th>
@@ -157,12 +158,12 @@ function Admin() {
                       <td className="py-3 pr-4 font-mono text-xs text-[#666]">/{m.slug}</td>
                       <td className="py-3 pr-4">{m.email}</td>
                       <td className="py-3 pr-4">{m.telefone || "-"}</td>
+                      <td className="py-3 pr-4 font-mono text-xs text-[#666]">{m.usuario_matrix || "-"}</td>
                       <td className="py-3 pr-4 text-[#666]">{new Date(m.created_at).toLocaleDateString("pt-BR")}</td>
                       <td className="py-3 text-center">
                         <button
                           onClick={() => toggleAtivo(m)}
                           disabled={toggling === m.id}
-                          title={m.ativo ? "Clique para desativar" : "Clique para ativar"}
                           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
                           style={{
                             background: m.ativo ? "#2E7D3215" : "#C6282815",
@@ -175,11 +176,8 @@ function Admin() {
                         </button>
                       </td>
                       <td className="py-3 text-center">
-                        <button
-                          onClick={() => setEditando(m)}
-                          title="Editar membro"
-                          className="inline-flex items-center justify-center rounded-lg border border-[#E0E0E0] p-2 text-[#666] hover:border-[#F57C00] hover:text-[#F57C00] transition"
-                        >
+                        <button onClick={() => setEditando(m)}
+                          className="inline-flex items-center justify-center rounded-lg border border-[#E0E0E0] p-2 text-[#666] hover:border-[#F57C00] hover:text-[#F57C00] transition">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                       </td>
@@ -199,26 +197,22 @@ function Admin() {
                       <p className="text-xs text-[#666] font-mono">/{m.slug}</p>
                       <p className="text-xs text-[#666] mt-1">{m.email}</p>
                       {m.telefone && <p className="text-xs text-[#666]">{m.telefone}</p>}
+                      {m.usuario_matrix && <p className="text-xs text-[#F57C00] font-mono mt-1">Matrix: {m.usuario_matrix}</p>}
                       <p className="text-xs text-[#999] mt-1">Cadastro: {new Date(m.created_at).toLocaleDateString("pt-BR")}</p>
                     </div>
-                    <button
-                      onClick={() => setEditando(m)}
-                      className="rounded-lg border border-[#E0E0E0] p-2 text-[#666] hover:border-[#F57C00] hover:text-[#F57C00]"
-                    >
+                    <button onClick={() => setEditando(m)}
+                      className="rounded-lg border border-[#E0E0E0] p-2 text-[#666] hover:border-[#F57C00] hover:text-[#F57C00]">
                       <Pencil className="h-4 w-4" />
                     </button>
                   </div>
                   <div className="mt-3">
-                    <button
-                      onClick={() => toggleAtivo(m)}
-                      disabled={toggling === m.id}
+                    <button onClick={() => toggleAtivo(m)} disabled={toggling === m.id}
                       className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition"
                       style={{
                         background: m.ativo ? "#2E7D3215" : "#C6282815",
                         color: m.ativo ? "#2E7D32" : "#C62828",
                         border: `1px solid ${m.ativo ? "#2E7D3240" : "#C6282840"}`,
-                      }}
-                    >
+                      }}>
                       {toggling === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : m.ativo ? <ToggleRight className="h-3.5 w-3.5" /> : <ToggleLeft className="h-3.5 w-3.5" />}
                       {m.ativo ? "Ativo — clique para desativar" : "Inativo — clique para ativar"}
                     </button>
@@ -237,8 +231,6 @@ function Admin() {
                 <Download className="h-4 w-4" /> Exportar CSV
               </button>
             </div>
-
-            {/* Tabela desktop */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b border-[#E0E0E0] text-left text-xs uppercase text-[#666]">
@@ -266,8 +258,6 @@ function Admin() {
                 </tbody>
               </table>
             </div>
-
-            {/* Cards mobile */}
             <div className="md:hidden space-y-3">
               {leads.map((l) => {
                 const membro = membros.find((m) => m.id === l.usuario_id);
@@ -293,7 +283,13 @@ function Admin() {
 }
 
 function EditMember({ membro, onClose, onSaved }: { membro: Membro; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ nome: membro.nome, telefone: membro.telefone || "", slug: membro.slug, role: membro.role || "membro" });
+  const [form, setForm] = useState({
+    nome: membro.nome,
+    telefone: membro.telefone || "",
+    slug: membro.slug,
+    usuario_matrix: membro.usuario_matrix || "",
+    role: membro.role || "membro",
+  });
   const [saving, setSaving] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -310,6 +306,7 @@ function EditMember({ membro, onClose, onSaved }: { membro: Membro; onClose: () 
       nome: form.nome,
       telefone: form.telefone || null,
       slug: novoSlug,
+      usuario_matrix: form.usuario_matrix.trim().toLowerCase() || null,
       role: form.role,
     }).eq("id", membro.id);
     setSaving(false);
@@ -343,7 +340,7 @@ function EditMember({ membro, onClose, onSaved }: { membro: Membro; onClose: () 
   const deletar = async () => {
     setDeleting(true);
     const supabase = await getSupabase();
-    await supabase.from("usuarios").delete().eq("id", membro.id);
+    await supabase.functions.invoke("admin-delete-member", { body: { userId: membro.id } });
     setDeleting(false);
     toast.success(`${membro.nome} foi removido do sistema.`);
     onSaved();
@@ -372,12 +369,21 @@ function EditMember({ membro, onClose, onSaved }: { membro: Membro; onClose: () 
           <div>
             <label className="mb-1 block text-xs font-medium uppercase text-[#666]">Usuário da página</label>
             <input value={form.slug} onChange={(e) => { setForm({ ...form, slug: e.target.value }); setErroSlug(""); }} required
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-mono focus:outline-none ${erroSlug ? "border-[#C62828] focus:border-[#C62828]" : "border-[#E0E0E0] focus:border-[#F57C00]"}`} />
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-mono focus:outline-none ${erroSlug ? "border-[#C62828]" : "border-[#E0E0E0] focus:border-[#F57C00]"}`} />
             {erroSlug ? (
               <p className="mt-1 text-xs text-[#C62828] font-medium">⚠️ {erroSlug}</p>
             ) : (
-              <p className="mt-1 text-xs text-[#999]">Página: energyia.club/{slugify(form.slug) || slugify(form.nome)}</p>
+              <p className="mt-1 text-xs text-[#999]">Página: energyia.club/consultor/{slugify(form.slug) || slugify(form.nome)}</p>
             )}
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase text-[#666]">Usuário Matrix</label>
+            <input value={form.usuario_matrix} onChange={(e) => setForm({ ...form, usuario_matrix: e.target.value })}
+              placeholder="usuario-matrix"
+              className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2.5 text-sm font-mono focus:border-[#F57C00] focus:outline-none" />
+            <p className="mt-1 text-xs text-[#999]">
+              Link: escritorio.matrix360.com.br/{form.usuario_matrix.trim().toLowerCase() || "..."}
+            </p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium uppercase text-[#666]">Perfil</label>
@@ -404,7 +410,6 @@ function EditMember({ membro, onClose, onSaved }: { membro: Membro; onClose: () 
             {sendingReset ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
             Enviar redefinição de senha
           </button>
-
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)}
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#C62828]/30 py-3 text-sm font-medium text-[#C62828] hover:bg-[#C62828]/5">
@@ -433,7 +438,7 @@ function EditMember({ membro, onClose, onSaved }: { membro: Membro; onClose: () 
 }
 
 function CreateMember({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ nome: "", email: "", senha: "", telefone: "", slug: "" });
+  const [form, setForm] = useState({ nome: "", email: "", senha: "", telefone: "", slug: "", usuario_matrix: "" });
   const [submitting, setSubmitting] = useState(false);
   const [erros, setErros] = useState<{ email?: string; slug?: string }>({});
 
@@ -444,7 +449,7 @@ function CreateMember({ onClose, onCreated }: { onClose: () => void; onCreated: 
     const supabase = await getSupabase();
     const slug = slugify(form.slug || form.nome);
     const { data, error } = await supabase.functions.invoke("admin-create-member", {
-      body: { ...form, slug },
+      body: { ...form, slug, usuario_matrix: form.usuario_matrix.trim().toLowerCase() },
     });
     setSubmitting(false);
     const errMsg = error?.message || (data as any)?.error || "";
@@ -466,8 +471,9 @@ function CreateMember({ onClose, onCreated }: { onClose: () => void; onCreated: 
     nome: "Nome completo",
     email: "E-mail",
     senha: "Senha",
-    telefone: "Telefone / WhatsApp (opcional)",
-    slug: "Usuário da página (opcional)",
+    telefone: "Telefone / WhatsApp",
+    slug: "Usuário da página",
+    usuario_matrix: "Usuário Matrix",
   };
 
   return (
@@ -478,15 +484,15 @@ function CreateMember({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <button onClick={onClose}><X className="h-5 w-5 text-[#666]" /></button>
         </div>
         <form onSubmit={submit} className="space-y-3">
-          {(["nome", "email", "senha", "telefone", "slug"] as const).map((k) => (
+          {(["nome", "email", "senha", "telefone", "slug", "usuario_matrix"] as const).map((k) => (
             <div key={k}>
               <label className="mb-1 block text-xs font-medium uppercase text-[#666]">{labels[k]}</label>
               <input
-                required={k !== "telefone" && k !== "slug"}
+                required={k !== "telefone" && k !== "slug" && k !== "usuario_matrix"}
                 type={k === "senha" ? "password" : k === "email" ? "email" : "text"}
                 value={form[k]}
                 onChange={(e) => { setForm({ ...form, [k]: e.target.value }); setErros(prev => ({ ...prev, [k]: undefined })); }}
-                className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none ${erros[k as keyof typeof erros] ? "border-[#C62828] focus:border-[#C62828]" : "border-[#E0E0E0] focus:border-[#F57C00]"}`}
+                className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none ${erros[k as keyof typeof erros] ? "border-[#C62828]" : "border-[#E0E0E0] focus:border-[#F57C00]"}`}
               />
               {erros[k as keyof typeof erros] && (
                 <p className="mt-1 text-xs text-[#C62828] font-medium">⚠️ {erros[k as keyof typeof erros]}</p>
