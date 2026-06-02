@@ -10,7 +10,11 @@ interface Consultor {
   id: string; nome: string; slug: string; cidade?: string; foto_url?: string;
   whatsapp?: string; email?: string; telefone?: string;
   link_ebook?: string; link_patrocinador?: string; link_ferramentas?: string;
+  usuario_matrix?: string;
 }
+
+const DEFAULT_EBOOK = "https://pay.hotmart.com/E105718812K";
+const DEFAULT_FERRAMENTAS = "#";
 
 export function MatrixSlugPage() {
   const { slug } = Route.useParams();
@@ -24,7 +28,7 @@ export function MatrixSlugPage() {
         const url = import.meta.env.VITE_SUPABASE_URL;
         const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const res = await fetch(
-          `${url}/rest/v1/usuarios_public?select=id,nome,slug,cidade,foto_url,whatsapp,email,telefone,link_ebook,link_patrocinador,link_ferramentas&slug=eq.${encodeURIComponent(slug)}&ativo=eq.true&limit=1`,
+          `${url}/rest/v1/usuarios_public?select=id,nome,slug,cidade,foto_url,whatsapp,email,telefone,link_ebook,link_patrocinador,link_ferramentas,usuario_matrix&slug=eq.${encodeURIComponent(slug)}&ativo=eq.true&limit=1`,
           { headers: { apikey: key, authorization: `Bearer ${key}` } }
         );
         const data = await res.json();
@@ -58,9 +62,11 @@ export function MatrixSlugPage() {
     );
   }
 
-  const linkMetodo = c.link_ebook || "#";
-  const linkPatrocinador = c.link_patrocinador || "#";
-  const linkFerramentas = c.link_ferramentas || "#";
+  const linkMetodo = c.link_ebook || DEFAULT_EBOOK;
+  const linkPatrocinador = c.usuario_matrix
+    ? `https://escritorio.matrix360.com.br/${c.usuario_matrix}`
+    : "https://escritorio.matrix360.com.br/";
+  const linkFerramentas = c.link_ferramentas || DEFAULT_FERRAMENTAS;
   const wa = cleanPhone(c.whatsapp || "");
   const whatsappLink = wa ? `https://wa.me/${wa}` : "#";
 
