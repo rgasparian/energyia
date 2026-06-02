@@ -240,27 +240,7 @@ export function MatrixLayout({
         </div>
       </nav>
 
-      {consultor && (
-        <div style={{background:"rgba(245,124,0,0.06)",borderBottom:"1px solid rgba(245,124,0,0.2)",padding:"14px 24px"}}>
-          <div className="container" style={{display:"flex",alignItems:"center",gap:14}}>
-            {consultor.foto_url
-              ? <img src={consultor.foto_url} alt={consultor.nome} style={{width:44,height:44,borderRadius:"50%",border:"2px solid #F57C00",objectFit:"cover"}}/>
-              : <div style={{width:44,height:44,borderRadius:"50%",background:"#F57C00",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Outfit',sans-serif",fontWeight:700,fontSize:18,color:"#fff"}}>{consultor.nome.charAt(0)}</div>
-            }
-            <div>
-              <div style={{fontSize:10,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"#F57C00"}}>Seu consultor</div>
-              <div style={{fontFamily:"'Outfit',sans-serif",fontWeight:700,fontSize:15,color:"#fff"}}>{consultor.nome}</div>
-              {consultor.cidade && <div style={{fontSize:12,color:"rgba(255,255,255,0.45)"}}>{consultor.cidade}</div>}
-            </div>
-            {consultor.whatsapp && (
-              <a href={`https://wa.me/${consultor.whatsapp.replace(/\D/g,"")}`} target="_blank" rel="noreferrer"
-                style={{marginLeft:"auto",background:"#25D366",color:"#fff",padding:"8px 16px",borderRadius:8,fontFamily:"'Outfit',sans-serif",fontWeight:700,fontSize:12,textDecoration:"none"}}>
-                WhatsApp
-              </a>
-            )}
-          </div>
-        </div>
-      )}
+
 
       <section className="hero">
         <div className="hero-glow"/>
