@@ -24,6 +24,7 @@ interface Consultor {
   whatsapp?: string; email?: string; telefone?: string;
   instagram?: string; facebook?: string; youtube?: string;
   link_ebook?: string; link_cliente?: string; link_guia?: string; link_patrocinador?: string;
+  usuario_matrix?: string;
 }
 
 const IMG = {
@@ -60,6 +61,9 @@ export function ConsultorPage() {
   const wa = cleanPhone(c.whatsapp || "");
   const whatsappLink = wa ? `https://wa.me/${wa}` : "#";
   const ig = (c.instagram || "").replace(/^@/, "");
+  const matrixLink = c.usuario_matrix
+    ? `https://escritorio.matrix360.com.br/${c.usuario_matrix}`
+    : "https://escritorio.matrix360.com.br/";
 
   return (
     <div style={{ fontFamily: "DM Sans, sans-serif", color: "#1A1A1A" }} className="bg-white">
@@ -288,7 +292,7 @@ export function ConsultorPage() {
                   <li className="flex gap-2"><span className="text-green-600">✓</span>Canal exclusivo de suporte</li>
                   <li className="flex gap-2"><span className="text-green-600">✓</span><span className="font-bold text-[#F57C00]">Bônus pré-lançamento: R$100 por indicação</span></li>
                 </ul>
-                <a href={c.link_patrocinador} target="_blank" rel="noreferrer" className="mt-6 block rounded-lg bg-[#F57C00] py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-orange-200 hover:bg-[#E65100]">
+                <a href={matrixLink} target="_blank" rel="noreferrer" className="mt-6 block rounded-lg bg-[#F57C00] py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-orange-200 hover:bg-[#E65100]">
                   ENTRAR COMO CONSULTOR MATRIX
                 </a>
               </div>
@@ -316,7 +320,7 @@ export function ConsultorPage() {
       {/* SIMULADOR */}
       <div id="simulador" className="bg-white">
         <Section label="SIMULADOR" title="Quanto você pode ganhar como Consultor Matrix?">
-          <Simulador linkPatrocinador={c.link_patrocinador || "#"} />
+          <Simulador linkPatrocinador={matrixLink} />
         </Section>
       </div>
 
