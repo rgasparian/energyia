@@ -35,6 +35,7 @@ function Cadastro() {
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [slug, setSlug] = useState("");
+  const [usuarioMatrix, setUsuarioMatrix] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cadastrado, setCadastrado] = useState(false);
@@ -62,6 +63,7 @@ function Cadastro() {
           nome,
           telefone,
           slug: finalSlug,
+          usuario_matrix: usuarioMatrix.trim().toLowerCase(),
           role: "membro",
         },
       },
@@ -128,13 +130,24 @@ function Cadastro() {
             <Field label="WhatsApp" value={telefone} onChange={setTelefone} placeholder="(11) 99999-9999" />
             <div>
               <Field
-                label="Usuário da sua página (opcional)"
+                label="Usuário da sua página"
                 value={slug}
                 onChange={setSlug}
                 placeholder="seunome"
               />
               <p className="mt-1 text-xs text-[#666]">
-                Sua página será: <span className="font-mono">energyia.club/{slug ? slugify(slug) : slugify(nome) || "seunome"}</span>
+                Sua página será: <span className="font-mono">energyia.club/consultor/{slug ? slugify(slug) : slugify(nome) || "seunome"}</span>
+              </p>
+            </div>
+            <div>
+              <Field
+                label="Usuário Matrix"
+                value={usuarioMatrix}
+                onChange={setUsuarioMatrix}
+                placeholder="seu-usuario-matrix"
+              />
+              <p className="mt-1 text-xs text-[#666]">
+                Seu link Matrix será: <span className="font-mono">escritorio.matrix360.com.br/{usuarioMatrix.trim().toLowerCase() || "..."}</span>
               </p>
             </div>
             <Field label="Senha" type="password" value={password} onChange={setPassword} required placeholder="Mínimo 6 caracteres" />
