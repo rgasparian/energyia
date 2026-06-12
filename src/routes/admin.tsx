@@ -1,510 +1,720 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth";
-import { toast } from "sonner";
-import { Zap, Loader2, Plus, ArrowLeft, Download, X, ToggleLeft, ToggleRight, Pencil, KeyRound, Trash2 } from "lucide-react";
-import { slugify } from "@/lib/utils-energyia";
-import { getSupabase } from "@/lib/supabase-browser";
+// src/routes/admin.tsx
+// ============================================================
+// Painel Admin — com drawer de gerenciamento por membro
+// Funcionalidades: editar perfil, alterar senha, log de auditoria
+// Acesso exclusivo: role = 'admin'
+// ============================================================
 
-export const Route = createFileRoute("/admin")({ component: Admin });
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+
+export const Route = createFileRoute("/admin")({
+  component: AdminPage,
+});
+
+// ─── Tipos ───────────────────────────────────────────────────
 
 interface Membro {
-  id: string; nome: string; email: string; telefone?: string; slug: string; ativo: boolean; created_at: string; role?: string; usuario_matrix?: string;
-}
-interface LeadFull {
-  id: string; nome: string; telefone: string; email?: string;
-  slug_origem?: string; created_at: string; usuario_id?: string;
+  id: string;
+  nome: string;
+  email: string;
+  slug: string;
+  telefone: string;
+  whatsapp: string;
+  instagram: string;
+  cidade: string;
+  foto_url: string;
+  link_ebook: string;
+  link_patrocinador: string;
+  link_ferramentas: string;
+  link_cliente: string;
+  link_guia: string;
+  ativo: boolean;
+  role: string;
+  created_at: string;
 }
 
-function Admin() {
+interface AuditLog {
+  id: string;
+  acao: string;
+  detalhes: string;
+  admin_slug: string;
+  created_at: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────
+
+function iniciais(nome: string): string {
+  return nome
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function formatarData(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function iconeAcao(acao: string): string {
+  switch (acao) {
+    case "alterar_senha": return "🔐";
+    case "editar_perfil": return "✏️";
+    case "desativar":     return "🚫";
+    case "ativar":        return "✅";
+    default:              return "📋";
+  }
+}
+
+function labelAcao(acao: string): string {
+  switch (acao) {
+    case "alterar_senha": return "Senha alterada pelo admin";
+    case "editar_perfil": return "Perfil editado pelo admin";
+    case "desativar":     return "Conta desativada pelo admin";
+    case "ativar":        return "Conta ativada pelo admin";
+    default:              return acao;
+  }
+}
+
+// ─── Componente principal ─────────────────────────────────────
+
+function AdminPage() {
   const navigate = useNavigate();
-  const { user, role, loading } = useAuth();
-  const [membros, setMembros] = useState<Membro[]>([]);
-  const [leads, setLeads] = useState<LeadFull[]>([]);
-  const [tab, setTab] = useState<"membros" | "leads">("membros");
-  const [showCreate, setShowCreate] = useState(false);
-  const [editando, setEditando] = useState<Membro | null>(null);
-  const [toggling, setToggling] = useState<string | null>(null);
+
+  const [loading, setLoading]         = useState(true);
+  const [membros, setMembros]         = useState<Membro[]>([]);
+  const [membroAtivo, setMembroAtivo] = useState<Membro | null>(null);
+  const [abaDrawer, setAbaDrawer]     = useState<"perfil" | "senha" | "links" | "auditoria">("perfil");
+  const [auditLog, setAuditLog]       = useState<AuditLog[]>([]);
+  const [toast, setToast]             = useState<{ msg: string; tipo: "ok" | "erro" } | null>(null);
+
+  // form states
+  const [formPerfil, setFormPerfil] = useState<Partial<Membro>>({});
+  const [novaSenha, setNovaSenha]   = useState("");
+  const [salvando, setSalvando]     = useState(false);
+
+  // ─── Verificar role admin ─────────────────────────────────
 
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        navigate({ to: "/login", search: { redirect: "/admin" } as any });
-      } else if (role !== null && role !== "admin") {
+    (async () => {
+      const { data: roleData } = await supabase.rpc("get_my_role");
+      if (roleData !== "admin") {
         navigate({ to: "/painel" });
+        return;
       }
-    }
-  }, [user, role, loading, navigate]);
+      await carregarMembros();
+      setLoading(false);
+    })();
+  }, []);
 
-  const load = async () => {
-    const supabase = await getSupabase();
-    const { data: m } = await supabase.from("usuarios").select("id,nome,email,telefone,slug,ativo,created_at,role,usuario_matrix").order("created_at", { ascending: false });
-    setMembros((m as Membro[]) ?? []);
-    const { data: l } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
-    setLeads((l as LeadFull[]) ?? []);
-  };
+  // ─── Carregar membros ─────────────────────────────────────
 
-  useEffect(() => { if (role === "admin") load(); }, [role]);
-
-  const toggleAtivo = async (m: Membro) => {
-    const novoStatus = !m.ativo;
-    const confirmMsg = novoStatus
-      ? `Ativar ${m.nome}? Ele voltará a ter acesso ao sistema.`
-      : `Desativar ${m.nome}? Ele perderá o acesso ao sistema.`;
-    if (!window.confirm(confirmMsg)) return;
-
-    setToggling(m.id);
-    const supabase = await getSupabase();
-    const { error, data } = await supabase
+  async function carregarMembros() {
+    const { data, error } = await supabase
       .from("usuarios")
-      .update({ ativo: novoStatus })
-      .eq("id", m.id)
-      .select();
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    setToggling(null);
-
-    if (error) {
-      toast.error("Erro ao atualizar status: " + error.message);
-    } else if (!data || data.length === 0) {
-      toast.error("Atualização bloqueada pelo banco. Verifique as políticas RLS.");
-    } else {
-      setMembros(prev => prev.map(item => item.id === m.id ? { ...item, ativo: novoStatus } : item));
-      toast.success(`${m.nome} foi ${novoStatus ? "ativado ✅" : "desativado 🔴"} com sucesso.`);
-    }
-  };
-
-  const exportCsv = () => {
-    const header = "Nome,Telefone,Email,Membro origem,Data\n";
-    const rows = leads.map((l) => {
-      const membro = membros.find((m) => m.id === l.usuario_id)?.nome || l.slug_origem || "";
-      return `"${l.nome}","${l.telefone}","${l.email || ""}","${membro}","${new Date(l.created_at).toLocaleString("pt-BR")}"`;
-    }).join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "leads.csv"; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  if (loading || role === null) {
-    return <div className="flex min-h-screen items-center justify-center bg-[#FAFAFA]"><Loader2 className="h-6 w-6 animate-spin text-[#F57C00]" /></div>;
+    if (!error && data) setMembros(data as Membro[]);
   }
 
-  if (role !== "admin") return null;
+  // ─── Abrir drawer ─────────────────────────────────────────
 
-  const ativos = membros.filter(m => m.ativo).length;
-  const inativos = membros.filter(m => !m.ativo).length;
+  async function abrirDrawer(membro: Membro) {
+    setMembroAtivo(membro);
+    setFormPerfil(membro);
+    setNovaSenha("");
+    setAbaDrawer("perfil");
+    await carregarAuditoria(membro.id);
+  }
+
+  async function carregarAuditoria(targetId: string) {
+    const { data } = await supabase
+      .from("admin_audit_log")
+      .select("*")
+      .eq("target_id", targetId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    setAuditLog((data as AuditLog[]) ?? []);
+  }
+
+  function fecharDrawer() {
+    setMembroAtivo(null);
+    setAuditLog([]);
+  }
+
+  // ─── Chamar Edge Function ─────────────────────────────────
+
+  async function chamarEdgeFunction(acao: string, dados?: Record<string, unknown>) {
+    if (!membroAtivo) return;
+    setSalvando(true);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-manage-member`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({
+          target_id:   membroAtivo.id,
+          target_slug: membroAtivo.slug,
+          acao,
+          dados,
+        }),
+      }
+    );
+
+    const json = await res.json();
+    setSalvando(false);
+
+    if (!res.ok || json.error) {
+      mostrarToast(json.error ?? "Erro ao executar ação", "erro");
+      return;
+    }
+
+    mostrarToast(json.mensagem ?? "Ação executada", "ok");
+    await carregarMembros();
+    await carregarAuditoria(membroAtivo.id);
+
+    // Atualizar membro ativo com novos dados
+    const atualizado = membros.find((m) => m.id === membroAtivo.id);
+    if (atualizado) setMembroAtivo({ ...atualizado, ...formPerfil });
+  }
+
+  // ─── Salvar perfil ────────────────────────────────────────
+
+  async function salvarPerfil() {
+    await chamarEdgeFunction("editar_perfil", { perfil: formPerfil });
+  }
+
+  // ─── Alterar senha ────────────────────────────────────────
+
+  async function alterarSenha() {
+    if (novaSenha.length < 6) {
+      mostrarToast("Senha deve ter no mínimo 6 caracteres", "erro");
+      return;
+    }
+    await chamarEdgeFunction("alterar_senha", { nova_senha: novaSenha });
+    setNovaSenha("");
+  }
+
+  // ─── Ativar / Desativar conta ─────────────────────────────
+
+  async function toggleAtivo() {
+    if (!membroAtivo) return;
+    const acao = membroAtivo.ativo ? "desativar" : "ativar";
+    await chamarEdgeFunction(acao);
+    setMembroAtivo({ ...membroAtivo, ativo: !membroAtivo.ativo });
+  }
+
+  // ─── Toast ────────────────────────────────────────────────
+
+  function mostrarToast(msg: string, tipo: "ok" | "erro") {
+    setToast({ msg, tipo });
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  // ─── Render ───────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div style={s.loadingWrap}>
+        <div style={s.loadingText}>Carregando painel...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <header className="border-b border-[#E0E0E0] bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link to="/" className="flex items-center gap-2">
-            <Zap className="h-6 w-6 text-[#F57C00]" fill="#F57C00" />
-            <span className="text-lg font-bold text-[#1A1A1A]">EnergyIA</span>
-            <span className="ml-2 rounded bg-[#F57C00]/10 px-2 py-0.5 text-xs font-semibold text-[#F57C00]">ADMIN</span>
-          </Link>
-          <Link to="/painel" className="inline-flex items-center gap-1.5 rounded-lg border border-[#E0E0E0] px-3 py-2 text-sm font-medium text-[#333] hover:bg-[#FAFAFA]">
-            <ArrowLeft className="h-4 w-4" /> Meu painel
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
-        <h1 className="text-2xl font-bold text-[#1A1A1A]">Painel administrativo</h1>
-
-        <div className="flex gap-2 border-b border-[#E0E0E0]">
-          {(["membros", "leads"] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-medium transition ${tab === t ? "border-b-2 border-[#F57C00] text-[#F57C00]" : "text-[#666] hover:text-[#1A1A1A]"}`}>
-              {t === "membros" ? `Membros (${membros.length})` : `Leads (${leads.length})`}
+    <div style={s.page}>
+      {/* ── Sidebar ── */}
+      <aside style={s.sidebar}>
+        <div style={s.logo}>⚡ Energy<span style={{ color: "#F57C00" }}>IA</span></div>
+        <nav>
+          {[
+            { label: "Membros", icon: "👥", path: "/admin" },
+            { label: "Leads",   icon: "📋", path: "/admin/leads" },
+            { label: "Painel",  icon: "🏠", path: "/painel" },
+          ].map((item) => (
+            <button
+              key={item.path}
+              style={s.navItem}
+              onClick={() => navigate({ to: item.path as never })}
+            >
+              {item.icon} {item.label}
             </button>
           ))}
+        </nav>
+      </aside>
+
+      {/* ── Main ── */}
+      <main style={s.main}>
+        {/* Banner de modo gerenciamento */}
+        {membroAtivo && (
+          <div style={s.banner}>
+            <span>
+              👁️ Você está gerenciando a conta de <strong>{membroAtivo.nome}</strong>. Alterações serão registradas no log de auditoria.
+            </span>
+            <button style={s.bannerBtn} onClick={fecharDrawer}>
+              ↩ Fechar gerenciamento
+            </button>
+          </div>
+        )}
+
+        {/* Header */}
+        <div style={s.topbar}>
+          <h1 style={s.topbarTitle}>Membros da equipe</h1>
+          <button style={s.btnPrimary} onClick={() => navigate({ to: "/cadastro" })}>
+            + Novo membro
+          </button>
         </div>
 
-        {tab === "membros" && (
-          <section className="rounded-xl border border-[#E0E0E0] bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
+        {/* Tabela */}
+        <div style={s.tableWrap}>
+          <div style={s.tableHeader}>
+            <span>Membro</span>
+            <span>E-mail</span>
+            <span>Slug</span>
+            <span>Status</span>
+            <span>Cadastro</span>
+            <span></span>
+          </div>
+
+          {membros.map((m) => (
+            <div key={m.id} style={s.tableRow}>
               <div>
-                <h2 className="text-lg font-semibold text-[#1A1A1A]">Membros</h2>
-                <p className="mt-0.5 text-xs text-[#666]">
-                  <span className="font-medium text-[#2E7D32]">{ativos} ativos</span>
-                  {inativos > 0 && <span className="ml-2 font-medium text-[#C62828]">{inativos} inativos</span>}
-                </p>
+                <div style={s.memberName}>{m.nome}</div>
+                <div style={s.memberSlug}>/consultor/{m.slug}</div>
               </div>
-              <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#F57C00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#E65100]">
-                <Plus className="h-4 w-4" /> Criar novo membro
-              </button>
+              <div style={s.cellText}>{m.email}</div>
+              <div style={s.cellText}>{m.slug}</div>
+              <div>
+                <span style={m.ativo ? s.badgeAtivo : s.badgeInativo}>
+                  {m.ativo ? "ativo" : "inativo"}
+                </span>
+              </div>
+              <div style={s.cellMuted}>{formatarData(m.created_at)}</div>
+              <div>
+                <button style={s.btnGerenciar} onClick={() => abrirDrawer(m)}>
+                  ⚙️ Gerenciar
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {membros.length === 0 && (
+            <div style={s.empty}>Nenhum membro cadastrado ainda.</div>
+          )}
+        </div>
+      </main>
+
+      {/* ── Drawer overlay ── */}
+      {membroAtivo && (
+        <div style={s.overlay} onClick={fecharDrawer}>
+          <aside style={s.drawer} onClick={(e) => e.stopPropagation()}>
+            {/* Header do drawer */}
+            <div style={s.drawerHeader}>
+              <div style={s.avatar}>{iniciais(membroAtivo.nome)}</div>
+              <div>
+                <div style={s.drawerNome}>{membroAtivo.nome}</div>
+                <div style={s.drawerMeta}>energyia.club/consultor/{membroAtivo.slug}</div>
+              </div>
+              <button style={s.btnClose} onClick={fecharDrawer}>✕</button>
             </div>
 
-            {/* Tabela desktop */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-[#E0E0E0] text-left text-xs uppercase text-[#666]">
-                  <tr>
-                    <th className="py-2 pr-4">Nome</th>
-                    <th className="py-2 pr-4">Usuário</th>
-                    <th className="py-2 pr-4">E-mail</th>
-                    <th className="py-2 pr-4">Telefone</th>
-                    <th className="py-2 pr-4">Matrix</th>
-                    <th className="py-2 pr-4">Cadastro</th>
-                    <th className="py-2 text-center">Acesso</th>
-                    <th className="py-2 text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {membros.map((m) => (
-                    <tr key={m.id} className={`border-b border-[#E0E0E0]/50 transition ${!m.ativo ? "opacity-50" : ""}`}>
-                      <td className="py-3 pr-4 font-medium">{m.nome}</td>
-                      <td className="py-3 pr-4 font-mono text-xs text-[#666]">/{m.slug}</td>
-                      <td className="py-3 pr-4">{m.email}</td>
-                      <td className="py-3 pr-4">{m.telefone || "-"}</td>
-                      <td className="py-3 pr-4 font-mono text-xs text-[#666]">{m.usuario_matrix || "-"}</td>
-                      <td className="py-3 pr-4 text-[#666]">{new Date(m.created_at).toLocaleDateString("pt-BR")}</td>
-                      <td className="py-3 text-center">
-                        <button
-                          onClick={() => toggleAtivo(m)}
-                          disabled={toggling === m.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
-                          style={{
-                            background: m.ativo ? "#2E7D3215" : "#C6282815",
-                            color: m.ativo ? "#2E7D32" : "#C62828",
-                            border: `1px solid ${m.ativo ? "#2E7D3240" : "#C6282840"}`,
-                          }}
-                        >
-                          {toggling === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : m.ativo ? <ToggleRight className="h-3.5 w-3.5" /> : <ToggleLeft className="h-3.5 w-3.5" />}
-                          {m.ativo ? "Ativo" : "Inativo"}
-                        </button>
-                      </td>
-                      <td className="py-3 text-center">
-                        <button onClick={() => setEditando(m)}
-                          className="inline-flex items-center justify-center rounded-lg border border-[#E0E0E0] p-2 text-[#666] hover:border-[#F57C00] hover:text-[#F57C00] transition">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Abas */}
+            <div style={s.tabRow}>
+              {(["perfil", "senha", "links", "auditoria"] as const).map((aba) => (
+                <button
+                  key={aba}
+                  style={abaDrawer === aba ? s.tabAtivo : s.tab}
+                  onClick={() => setAbaDrawer(aba)}
+                >
+                  {aba.charAt(0).toUpperCase() + aba.slice(1)}
+                </button>
+              ))}
             </div>
 
-            {/* Cards mobile */}
-            <div className="md:hidden space-y-3">
-              {membros.map((m) => (
-                <div key={m.id} className={`rounded-xl border border-[#E0E0E0] p-4 ${!m.ativo ? "opacity-50" : ""}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-[#1A1A1A]">{m.nome}</p>
-                      <p className="text-xs text-[#666] font-mono">/{m.slug}</p>
-                      <p className="text-xs text-[#666] mt-1">{m.email}</p>
-                      {m.telefone && <p className="text-xs text-[#666]">{m.telefone}</p>}
-                      {m.usuario_matrix && <p className="text-xs text-[#F57C00] font-mono mt-1">Matrix: {m.usuario_matrix}</p>}
-                      <p className="text-xs text-[#999] mt-1">Cadastro: {new Date(m.created_at).toLocaleDateString("pt-BR")}</p>
+            {/* Corpo do drawer */}
+            <div style={s.drawerBody}>
+
+              {/* ── ABA PERFIL ── */}
+              {abaDrawer === "perfil" && (
+                <div>
+                  <div style={s.sectionTitle}>Dados pessoais</div>
+                  {[
+                    { label: "Nome completo", key: "nome" },
+                    { label: "WhatsApp (com DDI)", key: "whatsapp" },
+                    { label: "Telefone", key: "telefone" },
+                    { label: "Instagram", key: "instagram" },
+                    { label: "Cidade", key: "cidade" },
+                    { label: "Slug (URL)", key: "slug" },
+                  ].map(({ label, key }) => (
+                    <div key={key} style={s.fieldRow}>
+                      <label style={s.fieldLabel}>{label}</label>
+                      <input
+                        style={s.fieldInput}
+                        value={(formPerfil as Record<string, string>)[key] ?? ""}
+                        onChange={(e) =>
+                          setFormPerfil((prev) => ({ ...prev, [key]: e.target.value }))
+                        }
+                      />
                     </div>
-                    <button onClick={() => setEditando(m)}
-                      className="rounded-lg border border-[#E0E0E0] p-2 text-[#666] hover:border-[#F57C00] hover:text-[#F57C00]">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="mt-3">
-                    <button onClick={() => toggleAtivo(m)} disabled={toggling === m.id}
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition"
-                      style={{
-                        background: m.ativo ? "#2E7D3215" : "#C6282815",
-                        color: m.ativo ? "#2E7D32" : "#C62828",
-                        border: `1px solid ${m.ativo ? "#2E7D3240" : "#C6282840"}`,
-                      }}>
-                      {toggling === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : m.ativo ? <ToggleRight className="h-3.5 w-3.5" /> : <ToggleLeft className="h-3.5 w-3.5" />}
-                      {m.ativo ? "Ativo — clique para desativar" : "Inativo — clique para ativar"}
+                  ))}
+
+                  <div style={{ marginTop: 16 }}>
+                    <div style={s.sectionTitle}>Status da conta</div>
+                    <button
+                      style={membroAtivo.ativo ? s.btnDanger : s.btnSuccess}
+                      onClick={toggleAtivo}
+                      disabled={salvando}
+                    >
+                      {membroAtivo.ativo ? "🚫 Desativar conta" : "✅ Ativar conta"}
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
+              )}
 
-        {tab === "leads" && (
-          <section className="rounded-xl border border-[#E0E0E0] bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#1A1A1A]">Todos os leads</h2>
-              <button onClick={exportCsv} className="inline-flex items-center gap-1.5 rounded-lg border border-[#E0E0E0] px-4 py-2 text-sm font-medium text-[#333] hover:bg-[#FAFAFA]">
-                <Download className="h-4 w-4" /> Exportar CSV
-              </button>
-            </div>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-[#E0E0E0] text-left text-xs uppercase text-[#666]">
-                  <tr>
-                    <th className="py-2 pr-4">Nome</th>
-                    <th className="py-2 pr-4">Telefone</th>
-                    <th className="py-2 pr-4">E-mail</th>
-                    <th className="py-2 pr-4">Membro origem</th>
-                    <th className="py-2">Data</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leads.map((l) => {
-                    const membro = membros.find((m) => m.id === l.usuario_id);
-                    return (
-                      <tr key={l.id} className="border-b border-[#E0E0E0]/50">
-                        <td className="py-2.5 pr-4 font-medium">{l.nome}</td>
-                        <td className="py-2.5 pr-4">{l.telefone}</td>
-                        <td className="py-2.5 pr-4">{l.email || "-"}</td>
-                        <td className="py-2.5 pr-4 text-[#666]">{membro?.nome || l.slug_origem}</td>
-                        <td className="py-2.5 text-[#666]">{new Date(l.created_at).toLocaleString("pt-BR")}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="md:hidden space-y-3">
-              {leads.map((l) => {
-                const membro = membros.find((m) => m.id === l.usuario_id);
-                return (
-                  <div key={l.id} className="rounded-xl border border-[#E0E0E0] p-4">
-                    <p className="font-semibold text-[#1A1A1A]">{l.nome}</p>
-                    <p className="text-xs text-[#666] mt-1">{l.telefone}</p>
-                    {l.email && <p className="text-xs text-[#666]">{l.email}</p>}
-                    <p className="text-xs text-[#999] mt-1">Origem: {membro?.nome || l.slug_origem || "-"}</p>
-                    <p className="text-xs text-[#999]">{new Date(l.created_at).toLocaleString("pt-BR")}</p>
+              {/* ── ABA SENHA ── */}
+              {abaDrawer === "senha" && (
+                <div>
+                  <div style={s.sectionTitle}>🔐 Alterar senha</div>
+                  <div style={s.avisoBox}>
+                    Somente o administrador pode alterar senhas. Esta ação será registrada no log de auditoria com data e hora.
                   </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-      </main>
+                  <div style={s.fieldRow}>
+                    <label style={s.fieldLabel}>Nova senha</label>
+                    <input
+                      type="text"
+                      style={s.fieldInput}
+                      placeholder="Mínimo 6 caracteres"
+                      value={novaSenha}
+                      onChange={(e) => setNovaSenha(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    style={{ ...s.btnPrimary, marginTop: 8, width: "100%" }}
+                    onClick={alterarSenha}
+                    disabled={salvando || novaSenha.length < 6}
+                  >
+                    {salvando ? "Alterando..." : "Confirmar nova senha"}
+                  </button>
+                </div>
+              )}
 
-      {showCreate && <CreateMember onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
-      {editando && <EditMember membro={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); load(); }} />}
-    </div>
-  );
-}
+              {/* ── ABA LINKS ── */}
+              {abaDrawer === "links" && (
+                <div>
+                  <div style={s.sectionTitle}>Links de afiliado</div>
+                  {[
+                    { label: "Link Ebook (R$17)", key: "link_ebook" },
+                    { label: "Link Patrocinador (R$249,90)", key: "link_patrocinador" },
+                    { label: "Link Ferramentas (R$197)", key: "link_ferramentas" },
+                    { label: "Link Cliente", key: "link_cliente" },
+                    { label: "Link Guia", key: "link_guia" },
+                  ].map(({ label, key }) => (
+                    <div key={key} style={s.fieldRow}>
+                      <label style={s.fieldLabel}>{label}</label>
+                      <input
+                        style={s.fieldInput}
+                        value={(formPerfil as Record<string, string>)[key] ?? ""}
+                        onChange={(e) =>
+                          setFormPerfil((prev) => ({ ...prev, [key]: e.target.value }))
+                        }
+                        placeholder="https://"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
 
-function EditMember({ membro, onClose, onSaved }: { membro: Membro; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({
-    nome: membro.nome,
-    telefone: membro.telefone || "",
-    slug: membro.slug,
-    usuario_matrix: membro.usuario_matrix || "",
-    role: membro.role || "membro",
-  });
-  const [saving, setSaving] = useState(false);
-  const [sendingReset, setSendingReset] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [erroSlug, setErroSlug] = useState("");
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErroSlug("");
-    setSaving(true);
-    const supabase = await getSupabase();
-    const novoSlug = slugify(form.slug) || slugify(form.nome);
-    const { error } = await supabase.from("usuarios").update({
-      nome: form.nome,
-      telefone: form.telefone || null,
-      slug: novoSlug,
-      usuario_matrix: form.usuario_matrix.trim().toLowerCase() || null,
-      role: form.role,
-    }).eq("id", membro.id);
-    setSaving(false);
-    if (error) {
-      if (error.message.includes("duplicate key") && error.message.includes("slug")) {
-        setErroSlug("Este usuário já está em uso. Escolha outro nome para a página.");
-      } else {
-        toast.error("Erro ao salvar: " + error.message);
-      }
-    } else {
-      toast.success("Dados atualizados com sucesso!");
-      onSaved();
-    }
-  };
-
-  const resetSenha = async () => {
-    if (!window.confirm(`Enviar e-mail de redefinição de senha para ${membro.email}?`)) return;
-    setSendingReset(true);
-    const supabase = await getSupabase();
-    const { error } = await supabase.auth.resetPasswordForEmail(membro.email, {
-      redirectTo: "https://energyia.club/painel",
-    });
-    setSendingReset(false);
-    if (error) {
-      toast.error("Erro ao enviar: " + error.message);
-    } else {
-      toast.success(`E-mail de redefinição enviado para ${membro.email} ✅`);
-    }
-  };
-
-  const deletar = async () => {
-    setDeleting(true);
-    const supabase = await getSupabase();
-    await supabase.functions.invoke("admin-delete-member", { body: { userId: membro.id } });
-    setDeleting(false);
-    toast.success(`${membro.nome} foi removido do sistema.`);
-    onSaved();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-[#1A1A1A]">Editar membro</h3>
-          <button onClick={onClose}><X className="h-5 w-5 text-[#666]" /></button>
-        </div>
-
-        <form onSubmit={save} className="space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-[#666]">Nome</label>
-            <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required
-              className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2.5 text-sm focus:border-[#F57C00] focus:outline-none" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-[#666]">Telefone / WhatsApp</label>
-            <input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })}
-              placeholder="(11) 99999-9999"
-              className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2.5 text-sm focus:border-[#F57C00] focus:outline-none" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-[#666]">Usuário da página</label>
-            <input value={form.slug} onChange={(e) => { setForm({ ...form, slug: e.target.value }); setErroSlug(""); }} required
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-mono focus:outline-none ${erroSlug ? "border-[#C62828]" : "border-[#E0E0E0] focus:border-[#F57C00]"}`} />
-            {erroSlug ? (
-              <p className="mt-1 text-xs text-[#C62828] font-medium">⚠️ {erroSlug}</p>
-            ) : (
-              <p className="mt-1 text-xs text-[#999]">Página: energyia.club/consultor/{slugify(form.slug) || slugify(form.nome)}</p>
-            )}
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-[#666]">Usuário Matrix</label>
-            <input value={form.usuario_matrix} onChange={(e) => setForm({ ...form, usuario_matrix: e.target.value })}
-              placeholder="usuario-matrix"
-              className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2.5 text-sm font-mono focus:border-[#F57C00] focus:outline-none" />
-            <p className="mt-1 text-xs text-[#999]">
-              Link: escritorio.matrix360.com.br/{form.usuario_matrix.trim().toLowerCase() || "..."}
-            </p>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-[#666]">Perfil</label>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-              className="w-full rounded-lg border border-[#E0E0E0] px-3 py-2.5 text-sm focus:border-[#F57C00] focus:outline-none">
-              <option value="membro">Membro</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase text-[#666]">E-mail</label>
-            <p className="rounded-lg bg-[#F5F5F5] px-3 py-2.5 text-sm text-[#666]">{membro.email}</p>
-            <p className="mt-0.5 text-xs text-[#999]">O e-mail não pode ser alterado por aqui.</p>
-          </div>
-          <button type="submit" disabled={saving}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F57C00] py-3 text-sm font-semibold text-white hover:bg-[#E65100] disabled:opacity-60">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />} Salvar alterações
-          </button>
-        </form>
-
-        <div className="mt-4 space-y-2 border-t border-[#E0E0E0] pt-4">
-          <button onClick={resetSenha} disabled={sendingReset}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#E0E0E0] py-3 text-sm font-medium text-[#333] hover:bg-[#FAFAFA] disabled:opacity-60">
-            {sendingReset ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-            Enviar redefinição de senha
-          </button>
-          {!confirmDelete ? (
-            <button onClick={() => setConfirmDelete(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#C62828]/30 py-3 text-sm font-medium text-[#C62828] hover:bg-[#C62828]/5">
-              <Trash2 className="h-4 w-4" /> Excluir membro
-            </button>
-          ) : (
-            <div className="rounded-lg border border-[#C62828]/30 bg-[#C62828]/5 p-4">
-              <p className="text-center text-sm text-[#C62828] font-medium">Confirmar exclusão de {membro.nome}?</p>
-              <p className="mt-1 text-center text-xs text-[#666]">Esta ação não pode ser desfeita.</p>
-              <div className="mt-3 flex gap-2">
-                <button onClick={() => setConfirmDelete(false)}
-                  className="flex-1 rounded-lg border border-[#E0E0E0] py-2.5 text-sm font-medium text-[#333] hover:bg-white">
-                  Cancelar
-                </button>
-                <button onClick={deletar} disabled={deleting}
-                  className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-[#C62828] py-2.5 text-sm font-semibold text-white hover:bg-[#B71C1C] disabled:opacity-60">
-                  {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Excluir
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CreateMember({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ nome: "", email: "", senha: "", telefone: "", slug: "", usuario_matrix: "" });
-  const [submitting, setSubmitting] = useState(false);
-  const [erros, setErros] = useState<{ email?: string; slug?: string }>({});
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErros({});
-    setSubmitting(true);
-    const supabase = await getSupabase();
-    const slug = slugify(form.slug || form.nome);
-    const { data, error } = await supabase.functions.invoke("admin-create-member", {
-      body: { ...form, slug, usuario_matrix: form.usuario_matrix.trim().toLowerCase() },
-    });
-    setSubmitting(false);
-    const errMsg = error?.message || (data as any)?.error || "";
-    if (errMsg) {
-      if (errMsg.includes("already registered") || errMsg.includes("email")) {
-        setErros({ email: "Este e-mail já está cadastrado." });
-      } else if (errMsg.includes("slug") || errMsg.includes("duplicate")) {
-        setErros({ slug: "Este usuário já está em uso. Escolha outro." });
-      } else {
-        toast.error("Erro: " + errMsg);
-      }
-    } else {
-      toast.success("Membro criado com sucesso!");
-      onCreated();
-    }
-  };
-
-  const labels: Record<string, string> = {
-    nome: "Nome completo",
-    email: "E-mail",
-    senha: "Senha",
-    telefone: "Telefone / WhatsApp",
-    slug: "Usuário da página",
-    usuario_matrix: "Usuário Matrix",
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-[#1A1A1A]">Novo membro</h3>
-          <button onClick={onClose}><X className="h-5 w-5 text-[#666]" /></button>
-        </div>
-        <form onSubmit={submit} className="space-y-3">
-          {(["nome", "email", "senha", "telefone", "slug", "usuario_matrix"] as const).map((k) => (
-            <div key={k}>
-              <label className="mb-1 block text-xs font-medium uppercase text-[#666]">{labels[k]}</label>
-              <input
-                required={k !== "telefone" && k !== "slug" && k !== "usuario_matrix"}
-                type={k === "senha" ? "password" : k === "email" ? "email" : "text"}
-                value={form[k]}
-                onChange={(e) => { setForm({ ...form, [k]: e.target.value }); setErros(prev => ({ ...prev, [k]: undefined })); }}
-                className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none ${erros[k as keyof typeof erros] ? "border-[#C62828]" : "border-[#E0E0E0] focus:border-[#F57C00]"}`}
-              />
-              {erros[k as keyof typeof erros] && (
-                <p className="mt-1 text-xs text-[#C62828] font-medium">⚠️ {erros[k as keyof typeof erros]}</p>
+              {/* ── ABA AUDITORIA ── */}
+              {abaDrawer === "auditoria" && (
+                <div>
+                  <div style={s.sectionTitle}>📋 Histórico de ações do admin</div>
+                  {auditLog.length === 0 ? (
+                    <div style={s.empty}>Nenhuma ação registrada ainda.</div>
+                  ) : (
+                    auditLog.map((log) => (
+                      <div key={log.id} style={s.auditItem}>
+                        <span style={s.auditIcon}>{iconeAcao(log.acao)}</span>
+                        <div>
+                          <div style={s.auditAcao}>{labelAcao(log.acao)}</div>
+                          <div style={s.auditMeta}>
+                            Admin: {log.admin_slug} · {formatarData(log.created_at)}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
-          ))}
-          <button type="submit" disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F57C00] py-3 text-sm font-semibold text-white hover:bg-[#E65100] disabled:opacity-60">
-            {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Criar membro
-          </button>
-        </form>
-      </div>
+
+            {/* Footer do drawer */}
+            {(abaDrawer === "perfil" || abaDrawer === "links") && (
+              <div style={s.drawerFooter}>
+                <button style={s.btnSecondary} onClick={fecharDrawer}>
+                  Cancelar
+                </button>
+                <button
+                  style={s.btnPrimary}
+                  onClick={salvarPerfil}
+                  disabled={salvando}
+                >
+                  {salvando ? "Salvando..." : "Salvar alterações"}
+                </button>
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div style={{ ...s.toast, background: toast.tipo === "ok" ? "#2E7D32" : "#C62828" }}>
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────
+
+const s: Record<string, React.CSSProperties> = {
+  page: {
+    display: "flex",
+    minHeight: "100vh",
+    background: "#FAFAFA",
+    fontFamily: "DM Sans, sans-serif",
+    position: "relative",
+  },
+  loadingWrap: {
+    display: "flex", alignItems: "center", justifyContent: "center",
+    minHeight: "100vh", background: "#FAFAFA",
+  },
+  loadingText: { color: "#666", fontSize: 16 },
+
+  // sidebar
+  sidebar: {
+    width: 220,
+    background: "#1A1A1A",
+    padding: "24px 16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    flexShrink: 0,
+  },
+  logo: {
+    fontSize: 20, fontWeight: 700, color: "#fff",
+    padding: "8px 8px 24px",
+    borderBottom: "1px solid rgba(255,255,255,0.1)",
+    marginBottom: 12,
+  },
+  navItem: {
+    display: "flex", alignItems: "center", gap: 10,
+    padding: "10px 12px", borderRadius: 8,
+    background: "transparent", border: "none",
+    color: "#ccc", fontSize: 14, cursor: "pointer",
+    textAlign: "left", width: "100%",
+  },
+
+  // main
+  main: { flex: 1, display: "flex", flexDirection: "column" },
+  banner: {
+    background: "#FFF3E0",
+    borderBottom: "1px solid #FFB74D",
+    padding: "10px 24px",
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    fontSize: 13, color: "#E65100",
+  },
+  bannerBtn: {
+    background: "white", border: "1px solid #FFB74D", color: "#E65100",
+    borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer",
+    marginLeft: 16, whiteSpace: "nowrap",
+  },
+  topbar: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "20px 24px", borderBottom: "1px solid #E0E0E0",
+  },
+  topbarTitle: { fontSize: 18, fontWeight: 600, color: "#1A1A1A", margin: 0 },
+
+  // tabela
+  tableWrap: { padding: "16px 24px", flex: 1 },
+  tableHeader: {
+    display: "grid",
+    gridTemplateColumns: "2fr 2fr 1fr 1fr 1.5fr 100px",
+    gap: 8, padding: "8px 12px",
+    fontSize: 11, color: "#888", textTransform: "uppercase",
+    letterSpacing: "0.05em", borderBottom: "1px solid #E0E0E0",
+    marginBottom: 4,
+  },
+  tableRow: {
+    display: "grid",
+    gridTemplateColumns: "2fr 2fr 1fr 1fr 1.5fr 100px",
+    gap: 8, alignItems: "center",
+    padding: "12px", borderRadius: 8,
+    border: "1px solid transparent",
+    marginBottom: 2,
+    background: "#fff",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+  },
+  memberName: { fontWeight: 600, fontSize: 14, color: "#1A1A1A" },
+  memberSlug: { fontSize: 12, color: "#888" },
+  cellText: { fontSize: 13, color: "#444" },
+  cellMuted: { fontSize: 12, color: "#888" },
+  badgeAtivo: {
+    display: "inline-block", fontSize: 11,
+    padding: "2px 10px", borderRadius: 20,
+    background: "#E8F5E9", color: "#2E7D32",
+  },
+  badgeInativo: {
+    display: "inline-block", fontSize: 11,
+    padding: "2px 10px", borderRadius: 20,
+    background: "#F5F5F5", color: "#888",
+  },
+  empty: { color: "#888", fontSize: 14, padding: "24px 0", textAlign: "center" },
+
+  // botões
+  btnPrimary: {
+    background: "#F57C00", color: "white",
+    border: "none", borderRadius: 8,
+    padding: "9px 18px", fontSize: 13,
+    fontWeight: 600, cursor: "pointer",
+  },
+  btnSecondary: {
+    background: "#F5F5F5", color: "#444",
+    border: "1px solid #E0E0E0", borderRadius: 8,
+    padding: "9px 18px", fontSize: 13, cursor: "pointer",
+  },
+  btnGerenciar: {
+    background: "white", border: "1px solid #E0E0E0", borderRadius: 6,
+    padding: "5px 10px", fontSize: 12, cursor: "pointer", color: "#333",
+  },
+  btnDanger: {
+    background: "#FFEBEE", color: "#C62828",
+    border: "1px solid #EF9A9A", borderRadius: 8,
+    padding: "8px 14px", fontSize: 13, cursor: "pointer",
+    width: "100%", textAlign: "left",
+  },
+  btnSuccess: {
+    background: "#E8F5E9", color: "#2E7D32",
+    border: "1px solid #A5D6A7", borderRadius: 8,
+    padding: "8px 14px", fontSize: 13, cursor: "pointer",
+    width: "100%", textAlign: "left",
+  },
+  btnClose: {
+    marginLeft: "auto", background: "none", border: "none",
+    fontSize: 18, cursor: "pointer", color: "#888", padding: 4,
+  },
+
+  // drawer
+  overlay: {
+    position: "fixed", inset: 0,
+    background: "rgba(0,0,0,0.35)",
+    display: "flex", justifyContent: "flex-end",
+    zIndex: 1000,
+  },
+  drawer: {
+    width: 420, height: "100%",
+    background: "#fff",
+    borderLeft: "1px solid #E0E0E0",
+    display: "flex", flexDirection: "column",
+    overflowY: "auto",
+  },
+  drawerHeader: {
+    padding: "16px 20px",
+    borderBottom: "1px solid #E0E0E0",
+    display: "flex", alignItems: "center", gap: 12,
+    flexShrink: 0,
+  },
+  avatar: {
+    width: 40, height: 40, borderRadius: "50%",
+    background: "#E3F2FD", color: "#1565C0",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 14, fontWeight: 700, flexShrink: 0,
+  },
+  drawerNome: { fontSize: 15, fontWeight: 600, color: "#1A1A1A" },
+  drawerMeta: { fontSize: 12, color: "#888" },
+
+  // abas
+  tabRow: {
+    display: "flex", gap: 4, padding: "12px 20px",
+    borderBottom: "1px solid #E0E0E0", flexShrink: 0,
+  },
+  tab: {
+    padding: "5px 12px", borderRadius: 6,
+    border: "1px solid #E0E0E0",
+    background: "white", color: "#666",
+    fontSize: 12, cursor: "pointer",
+  },
+  tabAtivo: {
+    padding: "5px 12px", borderRadius: 6,
+    border: "1px solid #F57C00",
+    background: "#F57C00", color: "white",
+    fontSize: 12, cursor: "pointer",
+    fontWeight: 600,
+  },
+
+  // corpo drawer
+  drawerBody: { flex: 1, padding: "16px 20px", overflowY: "auto" },
+  sectionTitle: {
+    fontSize: 11, fontWeight: 600, color: "#888",
+    textTransform: "uppercase", letterSpacing: "0.06em",
+    marginBottom: 12,
+  },
+  fieldRow: { marginBottom: 12 },
+  fieldLabel: { display: "block", fontSize: 12, color: "#666", marginBottom: 4 },
+  fieldInput: {
+    width: "100%", border: "1px solid #E0E0E0",
+    borderRadius: 6, padding: "7px 10px",
+    fontSize: 13, color: "#1A1A1A",
+    background: "#FAFAFA", boxSizing: "border-box",
+  },
+  avisoBox: {
+    background: "#FFF8E1", border: "1px solid #FFE082",
+    borderRadius: 8, padding: "10px 14px",
+    fontSize: 13, color: "#5D4037",
+    marginBottom: 16, lineHeight: 1.5,
+  },
+
+  // auditoria
+  auditItem: {
+    display: "flex", gap: 10, alignItems: "flex-start",
+    padding: "10px 0", borderBottom: "1px solid #F5F5F5",
+  },
+  auditIcon: { fontSize: 18, flexShrink: 0, marginTop: 2 },
+  auditAcao: { fontSize: 13, color: "#1A1A1A", fontWeight: 500 },
+  auditMeta: { fontSize: 12, color: "#888", marginTop: 2 },
+
+  // footer drawer
+  drawerFooter: {
+    padding: "12px 20px",
+    borderTop: "1px solid #E0E0E0",
+    display: "flex", gap: 8, flexShrink: 0,
+    justifyContent: "flex-end",
+  },
+
+  // toast
+  toast: {
+    position: "fixed", bottom: 24, right: 24,
+    color: "white", padding: "12px 20px",
+    borderRadius: 8, fontSize: 14, fontWeight: 500,
+    zIndex: 9999, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+  },
+};
