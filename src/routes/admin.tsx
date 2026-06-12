@@ -1,19 +1,14 @@
-// src/routes/admin.tsx
-// ============================================================
-// Painel Admin — com drawer de gerenciamento por membro
-// Funcionalidades: editar perfil, alterar senha, log de auditoria
-// Acesso exclusivo: role = 'admin'
-// ============================================================
-
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-// ─── Tipos ───────────────────────────────────────────────────
+// ─── Tipos ────────────────────────────────────────────────────
+
+type Aba = "perfil" | "senha" | "links" | "auditoria";
 
 interface Membro {
   id: string;
@@ -43,125 +38,107 @@ interface AuditLog {
   created_at: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────
+type Toast = { msg: string; tipo: "ok" | "erro" };
 
-function iniciais(nome: string): string {
-  return nome
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+// ─── Helpers ──────────────────────────────────────────────────
+
+function iniciais(nome: string) {
+  return nome.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
-function formatarData(iso: string): string {
+function dataFmt(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
   });
 }
 
-function iconeAcao(acao: string): string {
-  switch (acao) {
-    case "alterar_senha": return "🔐";
-    case "editar_perfil": return "✏️";
-    case "desativar":     return "🚫";
-    case "ativar":        return "✅";
-    default:              return "📋";
-  }
-}
+const ICONE_ACAO: Record<string, string> = {
+  alterar_senha: "🔐",
+  editar_perfil: "✏️",
+  desativar: "🚫",
+  ativar: "✅",
+};
 
-function labelAcao(acao: string): string {
-  switch (acao) {
-    case "alterar_senha": return "Senha alterada pelo admin";
-    case "editar_perfil": return "Perfil editado pelo admin";
-    case "desativar":     return "Conta desativada pelo admin";
-    case "ativar":        return "Conta ativada pelo admin";
-    default:              return acao;
-  }
-}
+const LABEL_ACAO: Record<string, string> = {
+  alterar_senha: "Senha alterada pelo admin",
+  editar_perfil: "Perfil editado pelo admin",
+  desativar: "Conta desativada",
+  ativar: "Conta ativada",
+};
 
-// ─── Componente principal ─────────────────────────────────────
+// ─── Componente ───────────────────────────────────────────────
 
 function AdminPage() {
   const navigate = useNavigate();
 
   const [loading, setLoading]         = useState(true);
   const [membros, setMembros]         = useState<Membro[]>([]);
-  const [membroAtivo, setMembroAtivo] = useState<Membro | null>(null);
-  const [abaDrawer, setAbaDrawer]     = useState<"perfil" | "senha" | "links" | "auditoria">("perfil");
+  const [alvo, setAlvo]               = useState<Membro | null>(null);
+  const [aba, setAba]                 = useState<Aba>("perfil");
   const [auditLog, setAuditLog]       = useState<AuditLog[]>([]);
-  const [toast, setToast]             = useState<{ msg: string; tipo: "ok" | "erro" } | null>(null);
+  const [formPerfil, setFormPerfil]   = useState<Partial<Membro>>({});
+  const [novaSenha, setNovaSenha]     = useState("");
+  const [salvando, setSalvando]       = useState(false);
+  const [toast, setToast]             = useState<Toast | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // form states
-  const [formPerfil, setFormPerfil] = useState<Partial<Membro>>({});
-  const [novaSenha, setNovaSenha]   = useState("");
-  const [salvando, setSalvando]     = useState(false);
-
-  // ─── Verificar role admin ─────────────────────────────────
+  // ── Verificar role ──────────────────────────────────────────
 
   useEffect(() => {
     (async () => {
-      const { data: roleData } = await supabase.rpc("get_my_role");
-      if (roleData !== "admin") {
-        navigate({ to: "/painel" });
-        return;
-      }
-      await carregarMembros();
+      const { data: role } = await supabase.rpc("get_my_role");
+      if (role !== "admin") { navigate({ to: "/painel" }); return; }
+      await buscarMembros();
       setLoading(false);
     })();
   }, []);
 
-  // ─── Carregar membros ─────────────────────────────────────
+  // ── Membros ─────────────────────────────────────────────────
 
-  async function carregarMembros() {
+  async function buscarMembros() {
     const { data, error } = await supabase
       .from("usuarios")
       .select("*")
       .order("created_at", { ascending: false });
-
     if (!error && data) setMembros(data as Membro[]);
   }
 
-  // ─── Abrir drawer ─────────────────────────────────────────
+  // ── Drawer ──────────────────────────────────────────────────
 
-  async function abrirDrawer(membro: Membro) {
-    setMembroAtivo(membro);
-    setFormPerfil(membro);
+  async function abrirDrawer(m: Membro) {
+    setAlvo(m);
+    setFormPerfil(m);
     setNovaSenha("");
-    setAbaDrawer("perfil");
-    await carregarAuditoria(membro.id);
-  }
-
-  async function carregarAuditoria(targetId: string) {
-    const { data } = await supabase
-      .from("admin_audit_log")
-      .select("*")
-      .eq("target_id", targetId)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    setAuditLog((data as AuditLog[]) ?? []);
+    setAba("perfil");
+    await buscarAuditoria(m.id);
   }
 
   function fecharDrawer() {
-    setMembroAtivo(null);
+    setAlvo(null);
     setAuditLog([]);
   }
 
-  // ─── Chamar Edge Function ─────────────────────────────────
+  async function buscarAuditoria(id: string) {
+    const { data } = await supabase
+      .from("admin_audit_log")
+      .select("*")
+      .eq("target_id", id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    setAuditLog((data as AuditLog[]) ?? []);
+  }
 
-  async function chamarEdgeFunction(acao: string, dados?: Record<string, unknown>) {
-    if (!membroAtivo) return;
+  // ── Edge Function ────────────────────────────────────────────
+
+  async function chamarEdge(acao: string, dados?: Record<string, unknown>) {
+    if (!alvo) return false;
     setSalvando(true);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
+    const { data: sessao } = await supabase.auth.getSession();
+    const token = sessao?.session?.access_token ?? "";
 
-    const res = await fetch(
+    const resp = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-manage-member`,
       {
         method: "POST",
@@ -171,89 +148,85 @@ function AdminPage() {
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
-          target_id:   membroAtivo.id,
-          target_slug: membroAtivo.slug,
+          target_id: alvo.id,
+          target_slug: alvo.slug,
           acao,
           dados,
         }),
       }
     );
 
-    const json = await res.json();
+    const json = await resp.json();
     setSalvando(false);
 
-    if (!res.ok || json.error) {
-      mostrarToast(json.error ?? "Erro ao executar ação", "erro");
-      return;
+    if (!resp.ok || json.error) {
+      exibirToast(json.error ?? "Erro ao executar ação", "erro");
+      return false;
     }
 
-    mostrarToast(json.mensagem ?? "Ação executada", "ok");
-    await carregarMembros();
-    await carregarAuditoria(membroAtivo.id);
-
-    // Atualizar membro ativo com novos dados
-    const atualizado = membros.find((m) => m.id === membroAtivo.id);
-    if (atualizado) setMembroAtivo({ ...atualizado, ...formPerfil });
+    exibirToast(json.mensagem ?? "Ação executada com sucesso", "ok");
+    await buscarMembros();
+    await buscarAuditoria(alvo.id);
+    return true;
   }
 
-  // ─── Salvar perfil ────────────────────────────────────────
+  // ── Ações ────────────────────────────────────────────────────
 
   async function salvarPerfil() {
-    await chamarEdgeFunction("editar_perfil", { perfil: formPerfil });
+    await chamarEdge("editar_perfil", { perfil: formPerfil });
   }
-
-  // ─── Alterar senha ────────────────────────────────────────
 
   async function alterarSenha() {
     if (novaSenha.length < 6) {
-      mostrarToast("Senha deve ter no mínimo 6 caracteres", "erro");
+      exibirToast("Senha deve ter no mínimo 6 caracteres", "erro");
       return;
     }
-    await chamarEdgeFunction("alterar_senha", { nova_senha: novaSenha });
-    setNovaSenha("");
+    const ok = await chamarEdge("alterar_senha", { nova_senha: novaSenha });
+    if (ok) setNovaSenha("");
   }
-
-  // ─── Ativar / Desativar conta ─────────────────────────────
 
   async function toggleAtivo() {
-    if (!membroAtivo) return;
-    const acao = membroAtivo.ativo ? "desativar" : "ativar";
-    await chamarEdgeFunction(acao);
-    setMembroAtivo({ ...membroAtivo, ativo: !membroAtivo.ativo });
+    if (!alvo) return;
+    const acao = alvo.ativo ? "desativar" : "ativar";
+    const ok = await chamarEdge(acao);
+    if (ok) setAlvo({ ...alvo, ativo: !alvo.ativo });
   }
 
-  // ─── Toast ────────────────────────────────────────────────
+  // ── Toast ────────────────────────────────────────────────────
 
-  function mostrarToast(msg: string, tipo: "ok" | "erro") {
+  function exibirToast(msg: string, tipo: "ok" | "erro") {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ msg, tipo });
-    setTimeout(() => setToast(null), 3500);
+    toastTimer.current = setTimeout(() => setToast(null), 3500);
   }
 
-  // ─── Render ───────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div style={s.loadingWrap}>
-        <div style={s.loadingText}>Carregando painel...</div>
+        <span style={s.loadingText}>Carregando painel...</span>
       </div>
     );
   }
 
   return (
     <div style={s.page}>
+
       {/* ── Sidebar ── */}
       <aside style={s.sidebar}>
-        <div style={s.logo}>⚡ Energy<span style={{ color: "#F57C00" }}>IA</span></div>
-        <nav>
+        <div style={s.logo}>
+          ⚡ Energy<span style={{ color: "#F57C00" }}>IA</span>
+        </div>
+        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {[
-            { label: "Membros", icon: "👥", path: "/admin" },
-            { label: "Leads",   icon: "📋", path: "/admin/leads" },
-            { label: "Painel",  icon: "🏠", path: "/painel" },
+            { label: "Membros", icon: "👥", to: "/admin" },
+            { label: "Painel",  icon: "🏠", to: "/painel" },
           ].map((item) => (
             <button
-              key={item.path}
+              key={item.to}
               style={s.navItem}
-              onClick={() => navigate({ to: item.path as never })}
+              onClick={() => navigate({ to: item.to as never })}
             >
               {item.icon} {item.label}
             </button>
@@ -261,29 +234,30 @@ function AdminPage() {
         </nav>
       </aside>
 
-      {/* ── Main ── */}
+      {/* ── Conteúdo ── */}
       <main style={s.main}>
-        {/* Banner de modo gerenciamento */}
-        {membroAtivo && (
+
+        {/* Banner laranja de modo gerenciamento */}
+        {alvo && (
           <div style={s.banner}>
             <span>
-              👁️ Você está gerenciando a conta de <strong>{membroAtivo.nome}</strong>. Alterações serão registradas no log de auditoria.
+              👁️ Gerenciando conta de <strong>{alvo.nome}</strong> — ações registradas em auditoria.
             </span>
             <button style={s.bannerBtn} onClick={fecharDrawer}>
-              ↩ Fechar gerenciamento
+              ↩ Sair do gerenciamento
             </button>
           </div>
         )}
 
-        {/* Header */}
+        {/* Topbar */}
         <div style={s.topbar}>
-          <h1 style={s.topbarTitle}>Membros da equipe</h1>
+          <h1 style={s.titulo}>Membros da equipe</h1>
           <button style={s.btnPrimary} onClick={() => navigate({ to: "/cadastro" })}>
             + Novo membro
           </button>
         </div>
 
-        {/* Tabela */}
+        {/* Tabela de membros */}
         <div style={s.tableWrap}>
           <div style={s.tableHeader}>
             <span>Membro</span>
@@ -294,20 +268,24 @@ function AdminPage() {
             <span></span>
           </div>
 
+          {membros.length === 0 && (
+            <div style={s.vazio}>Nenhum membro cadastrado.</div>
+          )}
+
           {membros.map((m) => (
             <div key={m.id} style={s.tableRow}>
               <div>
-                <div style={s.memberName}>{m.nome}</div>
-                <div style={s.memberSlug}>/consultor/{m.slug}</div>
+                <div style={s.membroNome}>{m.nome}</div>
+                <div style={s.membroSlug}>/consultor/{m.slug}</div>
               </div>
-              <div style={s.cellText}>{m.email}</div>
-              <div style={s.cellText}>{m.slug}</div>
+              <div style={s.celula}>{m.email}</div>
+              <div style={s.celula}>{m.slug}</div>
               <div>
                 <span style={m.ativo ? s.badgeAtivo : s.badgeInativo}>
                   {m.ativo ? "ativo" : "inativo"}
                 </span>
               </div>
-              <div style={s.cellMuted}>{formatarData(m.created_at)}</div>
+              <div style={s.celulaApagada}>{dataFmt(m.created_at)}</div>
               <div>
                 <button style={s.btnGerenciar} onClick={() => abrirDrawer(m)}>
                   ⚙️ Gerenciar
@@ -315,60 +293,57 @@ function AdminPage() {
               </div>
             </div>
           ))}
-
-          {membros.length === 0 && (
-            <div style={s.empty}>Nenhum membro cadastrado ainda.</div>
-          )}
         </div>
       </main>
 
-      {/* ── Drawer overlay ── */}
-      {membroAtivo && (
+      {/* ── Drawer lateral ── */}
+      {alvo && (
         <div style={s.overlay} onClick={fecharDrawer}>
           <aside style={s.drawer} onClick={(e) => e.stopPropagation()}>
-            {/* Header do drawer */}
-            <div style={s.drawerHeader}>
-              <div style={s.avatar}>{iniciais(membroAtivo.nome)}</div>
-              <div>
-                <div style={s.drawerNome}>{membroAtivo.nome}</div>
-                <div style={s.drawerMeta}>energyia.club/consultor/{membroAtivo.slug}</div>
+
+            {/* Cabeçalho do drawer */}
+            <div style={s.drawerHead}>
+              <div style={s.avatar}>{iniciais(alvo.nome)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={s.drawerNome}>{alvo.nome}</div>
+                <div style={s.drawerMeta}>energyia.club/consultor/{alvo.slug}</div>
               </div>
-              <button style={s.btnClose} onClick={fecharDrawer}>✕</button>
+              <button style={s.btnFechar} onClick={fecharDrawer}>✕</button>
             </div>
 
             {/* Abas */}
-            <div style={s.tabRow}>
-              {(["perfil", "senha", "links", "auditoria"] as const).map((aba) => (
+            <div style={s.abaRow}>
+              {(["perfil", "senha", "links", "auditoria"] as Aba[]).map((a) => (
                 <button
-                  key={aba}
-                  style={abaDrawer === aba ? s.tabAtivo : s.tab}
-                  onClick={() => setAbaDrawer(aba)}
+                  key={a}
+                  style={aba === a ? s.abaAtiva : s.aba}
+                  onClick={() => setAba(a)}
                 >
-                  {aba.charAt(0).toUpperCase() + aba.slice(1)}
+                  {a.charAt(0).toUpperCase() + a.slice(1)}
                 </button>
               ))}
             </div>
 
-            {/* Corpo do drawer */}
+            {/* Corpo */}
             <div style={s.drawerBody}>
 
               {/* ── ABA PERFIL ── */}
-              {abaDrawer === "perfil" && (
-                <div>
-                  <div style={s.sectionTitle}>Dados pessoais</div>
-                  {[
-                    { label: "Nome completo", key: "nome" },
+              {aba === "perfil" && (
+                <>
+                  <div style={s.secTitulo}>Dados pessoais</div>
+                  {([
+                    { label: "Nome completo",      key: "nome" },
                     { label: "WhatsApp (com DDI)", key: "whatsapp" },
-                    { label: "Telefone", key: "telefone" },
-                    { label: "Instagram", key: "instagram" },
-                    { label: "Cidade", key: "cidade" },
-                    { label: "Slug (URL)", key: "slug" },
-                  ].map(({ label, key }) => (
-                    <div key={key} style={s.fieldRow}>
-                      <label style={s.fieldLabel}>{label}</label>
+                    { label: "Telefone",           key: "telefone" },
+                    { label: "Instagram",          key: "instagram" },
+                    { label: "Cidade",             key: "cidade" },
+                    { label: "Slug (URL)",         key: "slug" },
+                  ] as { label: string; key: keyof Membro }[]).map(({ label, key }) => (
+                    <div key={key} style={s.campo}>
+                      <label style={s.campoLabel}>{label}</label>
                       <input
-                        style={s.fieldInput}
-                        value={(formPerfil as Record<string, string>)[key] ?? ""}
+                        style={s.campoInput}
+                        value={(formPerfil[key] as string) ?? ""}
                         onChange={(e) =>
                           setFormPerfil((prev) => ({ ...prev, [key]: e.target.value }))
                         }
@@ -376,106 +351,109 @@ function AdminPage() {
                     </div>
                   ))}
 
-                  <div style={{ marginTop: 16 }}>
-                    <div style={s.sectionTitle}>Status da conta</div>
+                  <div style={{ marginTop: 20 }}>
+                    <div style={s.secTitulo}>Status da conta</div>
                     <button
-                      style={membroAtivo.ativo ? s.btnDanger : s.btnSuccess}
+                      style={alvo.ativo ? s.btnDesativar : s.btnAtivar}
                       onClick={toggleAtivo}
                       disabled={salvando}
                     >
-                      {membroAtivo.ativo ? "🚫 Desativar conta" : "✅ Ativar conta"}
+                      {alvo.ativo ? "🚫 Desativar conta" : "✅ Ativar conta"}
                     </button>
                   </div>
-                </div>
+                </>
               )}
 
               {/* ── ABA SENHA ── */}
-              {abaDrawer === "senha" && (
-                <div>
-                  <div style={s.sectionTitle}>🔐 Alterar senha</div>
-                  <div style={s.avisoBox}>
-                    Somente o administrador pode alterar senhas. Esta ação será registrada no log de auditoria com data e hora.
+              {aba === "senha" && (
+                <>
+                  <div style={s.secTitulo}>🔐 Alterar senha do membro</div>
+                  <div style={s.aviso}>
+                    Apenas administradores podem redefinir senhas. Esta ação será registrada no log de auditoria com data, hora e responsável.
                   </div>
-                  <div style={s.fieldRow}>
-                    <label style={s.fieldLabel}>Nova senha</label>
+                  <div style={s.campo}>
+                    <label style={s.campoLabel}>Nova senha</label>
                     <input
                       type="text"
-                      style={s.fieldInput}
+                      style={s.campoInput}
                       placeholder="Mínimo 6 caracteres"
                       value={novaSenha}
                       onChange={(e) => setNovaSenha(e.target.value)}
                     />
                   </div>
                   <button
-                    style={{ ...s.btnPrimary, marginTop: 8, width: "100%" }}
+                    style={{ ...s.btnPrimary, width: "100%", marginTop: 8 }}
                     onClick={alterarSenha}
                     disabled={salvando || novaSenha.length < 6}
                   >
                     {salvando ? "Alterando..." : "Confirmar nova senha"}
                   </button>
-                </div>
+                </>
               )}
 
               {/* ── ABA LINKS ── */}
-              {abaDrawer === "links" && (
-                <div>
-                  <div style={s.sectionTitle}>Links de afiliado</div>
-                  {[
-                    { label: "Link Ebook (R$17)", key: "link_ebook" },
+              {aba === "links" && (
+                <>
+                  <div style={s.secTitulo}>Links de afiliado</div>
+                  {([
+                    { label: "Link Ebook (R$17)",            key: "link_ebook" },
                     { label: "Link Patrocinador (R$249,90)", key: "link_patrocinador" },
-                    { label: "Link Ferramentas (R$197)", key: "link_ferramentas" },
-                    { label: "Link Cliente", key: "link_cliente" },
-                    { label: "Link Guia", key: "link_guia" },
-                  ].map(({ label, key }) => (
-                    <div key={key} style={s.fieldRow}>
-                      <label style={s.fieldLabel}>{label}</label>
+                    { label: "Link Ferramentas (R$197)",     key: "link_ferramentas" },
+                    { label: "Link Cliente",                 key: "link_cliente" },
+                    { label: "Link Guia",                    key: "link_guia" },
+                  ] as { label: string; key: keyof Membro }[]).map(({ label, key }) => (
+                    <div key={key} style={s.campo}>
+                      <label style={s.campoLabel}>{label}</label>
                       <input
-                        style={s.fieldInput}
-                        value={(formPerfil as Record<string, string>)[key] ?? ""}
+                        style={s.campoInput}
+                        placeholder="https://"
+                        value={(formPerfil[key] as string) ?? ""}
                         onChange={(e) =>
                           setFormPerfil((prev) => ({ ...prev, [key]: e.target.value }))
                         }
-                        placeholder="https://"
                       />
                     </div>
                   ))}
-                </div>
+                </>
               )}
 
               {/* ── ABA AUDITORIA ── */}
-              {abaDrawer === "auditoria" && (
-                <div>
-                  <div style={s.sectionTitle}>📋 Histórico de ações do admin</div>
+              {aba === "auditoria" && (
+                <>
+                  <div style={s.secTitulo}>📋 Histórico de ações admin</div>
                   {auditLog.length === 0 ? (
-                    <div style={s.empty}>Nenhuma ação registrada ainda.</div>
+                    <div style={s.vazio}>Nenhuma ação registrada ainda.</div>
                   ) : (
                     auditLog.map((log) => (
                       <div key={log.id} style={s.auditItem}>
-                        <span style={s.auditIcon}>{iconeAcao(log.acao)}</span>
+                        <span style={s.auditIcone}>
+                          {ICONE_ACAO[log.acao] ?? "📋"}
+                        </span>
                         <div>
-                          <div style={s.auditAcao}>{labelAcao(log.acao)}</div>
-                          <div style={s.auditMeta}>
-                            Admin: {log.admin_slug} · {formatarData(log.created_at)}
+                          <div style={s.auditAcao}>
+                            {LABEL_ACAO[log.acao] ?? log.acao}
                           </div>
+                          <div style={s.auditMeta}>
+                            Admin: {log.admin_slug} · {dataFmt(log.created_at)}
+                          </div>
+                          {log.detalhes && (
+                            <div style={s.auditDetalhe}>{log.detalhes}</div>
+                          )}
                         </div>
                       </div>
                     ))
                   )}
-                </div>
+                </>
               )}
             </div>
 
-            {/* Footer do drawer */}
-            {(abaDrawer === "perfil" || abaDrawer === "links") && (
+            {/* Footer com botões de salvar */}
+            {(aba === "perfil" || aba === "links") && (
               <div style={s.drawerFooter}>
                 <button style={s.btnSecondary} onClick={fecharDrawer}>
                   Cancelar
                 </button>
-                <button
-                  style={s.btnPrimary}
-                  onClick={salvarPerfil}
-                  disabled={salvando}
-                >
+                <button style={s.btnPrimary} onClick={salvarPerfil} disabled={salvando}>
                   {salvando ? "Salvando..." : "Salvar alterações"}
                 </button>
               </div>
@@ -486,7 +464,12 @@ function AdminPage() {
 
       {/* ── Toast ── */}
       {toast && (
-        <div style={{ ...s.toast, background: toast.tipo === "ok" ? "#2E7D32" : "#C62828" }}>
+        <div
+          style={{
+            ...s.toast,
+            background: toast.tipo === "ok" ? "#2E7D32" : "#C62828",
+          }}
+        >
           {toast.msg}
         </div>
       )}
@@ -494,227 +477,235 @@ function AdminPage() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────
+// ─── Estilos ──────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
   page: {
     display: "flex",
     minHeight: "100vh",
-    background: "#FAFAFA",
+    background: "#F5F5F5",
     fontFamily: "DM Sans, sans-serif",
     position: "relative",
   },
   loadingWrap: {
     display: "flex", alignItems: "center", justifyContent: "center",
-    minHeight: "100vh", background: "#FAFAFA",
+    minHeight: "100vh", background: "#F5F5F5",
   },
-  loadingText: { color: "#666", fontSize: 16 },
+  loadingText: { fontSize: 15, color: "#888" },
 
   // sidebar
   sidebar: {
-    width: 220,
+    width: 220, flexShrink: 0,
     background: "#1A1A1A",
     padding: "24px 16px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    flexShrink: 0,
+    display: "flex", flexDirection: "column", gap: 0,
   },
   logo: {
     fontSize: 20, fontWeight: 700, color: "#fff",
     padding: "8px 8px 24px",
-    borderBottom: "1px solid rgba(255,255,255,0.1)",
-    marginBottom: 12,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    marginBottom: 16,
   },
   navItem: {
     display: "flex", alignItems: "center", gap: 10,
     padding: "10px 12px", borderRadius: 8,
     background: "transparent", border: "none",
-    color: "#ccc", fontSize: 14, cursor: "pointer",
+    color: "#bbb", fontSize: 14, cursor: "pointer",
     textAlign: "left", width: "100%",
+    transition: "background 0.15s",
   },
 
   // main
-  main: { flex: 1, display: "flex", flexDirection: "column" },
+  main: { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
+
+  // banner
   banner: {
     background: "#FFF3E0",
-    borderBottom: "1px solid #FFB74D",
+    borderBottom: "2px solid #F57C00",
     padding: "10px 24px",
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    fontSize: 13, color: "#E65100",
+    fontSize: 13, color: "#E65100", gap: 16,
   },
   bannerBtn: {
-    background: "white", border: "1px solid #FFB74D", color: "#E65100",
-    borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer",
-    marginLeft: 16, whiteSpace: "nowrap",
+    background: "#fff", border: "1px solid #F57C00", color: "#E65100",
+    borderRadius: 6, padding: "5px 14px", fontSize: 12,
+    cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
   },
+
+  // topbar
   topbar: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "20px 24px", borderBottom: "1px solid #E0E0E0",
+    background: "#fff",
   },
-  topbarTitle: { fontSize: 18, fontWeight: 600, color: "#1A1A1A", margin: 0 },
+  titulo: { fontSize: 18, fontWeight: 600, color: "#1A1A1A", margin: 0 },
 
   // tabela
-  tableWrap: { padding: "16px 24px", flex: 1 },
+  tableWrap: { padding: "20px 24px", flex: 1 },
   tableHeader: {
     display: "grid",
-    gridTemplateColumns: "2fr 2fr 1fr 1fr 1.5fr 100px",
-    gap: 8, padding: "8px 12px",
-    fontSize: 11, color: "#888", textTransform: "uppercase",
-    letterSpacing: "0.05em", borderBottom: "1px solid #E0E0E0",
-    marginBottom: 4,
+    gridTemplateColumns: "2fr 2fr 1fr 1fr 1.5fr 110px",
+    gap: 8, padding: "8px 14px",
+    fontSize: 11, color: "#999",
+    textTransform: "uppercase", letterSpacing: "0.05em",
+    borderBottom: "1px solid #E0E0E0", marginBottom: 6,
   },
   tableRow: {
     display: "grid",
-    gridTemplateColumns: "2fr 2fr 1fr 1fr 1.5fr 100px",
+    gridTemplateColumns: "2fr 2fr 1fr 1fr 1.5fr 110px",
     gap: 8, alignItems: "center",
-    padding: "12px", borderRadius: 8,
-    border: "1px solid transparent",
-    marginBottom: 2,
-    background: "#fff",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+    padding: "12px 14px", borderRadius: 8,
+    background: "#fff", marginBottom: 4,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+    border: "1px solid #EBEBEB",
   },
-  memberName: { fontWeight: 600, fontSize: 14, color: "#1A1A1A" },
-  memberSlug: { fontSize: 12, color: "#888" },
-  cellText: { fontSize: 13, color: "#444" },
-  cellMuted: { fontSize: 12, color: "#888" },
+  membroNome: { fontWeight: 600, fontSize: 14, color: "#1A1A1A" },
+  membroSlug: { fontSize: 11, color: "#999", marginTop: 2 },
+  celula: { fontSize: 13, color: "#555" },
+  celulaApagada: { fontSize: 12, color: "#aaa" },
   badgeAtivo: {
     display: "inline-block", fontSize: 11,
-    padding: "2px 10px", borderRadius: 20,
-    background: "#E8F5E9", color: "#2E7D32",
+    padding: "3px 10px", borderRadius: 20,
+    background: "#E8F5E9", color: "#2E7D32", fontWeight: 600,
   },
   badgeInativo: {
     display: "inline-block", fontSize: 11,
-    padding: "2px 10px", borderRadius: 20,
-    background: "#F5F5F5", color: "#888",
+    padding: "3px 10px", borderRadius: 20,
+    background: "#F5F5F5", color: "#999",
   },
-  empty: { color: "#888", fontSize: 14, padding: "24px 0", textAlign: "center" },
+  vazio: { color: "#aaa", fontSize: 14, padding: "32px 0", textAlign: "center" },
+  btnGerenciar: {
+    background: "#fff", border: "1px solid #E0E0E0", borderRadius: 6,
+    padding: "6px 12px", fontSize: 12, cursor: "pointer", color: "#444",
+  },
 
-  // botões
+  // botões gerais
   btnPrimary: {
-    background: "#F57C00", color: "white",
+    background: "#F57C00", color: "#fff",
     border: "none", borderRadius: 8,
     padding: "9px 18px", fontSize: 13,
     fontWeight: 600, cursor: "pointer",
   },
   btnSecondary: {
-    background: "#F5F5F5", color: "#444",
+    background: "#F5F5F5", color: "#555",
     border: "1px solid #E0E0E0", borderRadius: 8,
     padding: "9px 18px", fontSize: 13, cursor: "pointer",
   },
-  btnGerenciar: {
-    background: "white", border: "1px solid #E0E0E0", borderRadius: 6,
-    padding: "5px 10px", fontSize: 12, cursor: "pointer", color: "#333",
-  },
-  btnDanger: {
+  btnDesativar: {
     background: "#FFEBEE", color: "#C62828",
-    border: "1px solid #EF9A9A", borderRadius: 8,
-    padding: "8px 14px", fontSize: 13, cursor: "pointer",
+    border: "1px solid #FFCDD2", borderRadius: 8,
+    padding: "9px 16px", fontSize: 13, cursor: "pointer",
     width: "100%", textAlign: "left",
   },
-  btnSuccess: {
+  btnAtivar: {
     background: "#E8F5E9", color: "#2E7D32",
-    border: "1px solid #A5D6A7", borderRadius: 8,
-    padding: "8px 14px", fontSize: 13, cursor: "pointer",
+    border: "1px solid #C8E6C9", borderRadius: 8,
+    padding: "9px 16px", fontSize: 13, cursor: "pointer",
     width: "100%", textAlign: "left",
-  },
-  btnClose: {
-    marginLeft: "auto", background: "none", border: "none",
-    fontSize: 18, cursor: "pointer", color: "#888", padding: 4,
   },
 
-  // drawer
+  // overlay e drawer
   overlay: {
     position: "fixed", inset: 0,
-    background: "rgba(0,0,0,0.35)",
+    background: "rgba(0,0,0,0.4)",
     display: "flex", justifyContent: "flex-end",
     zIndex: 1000,
   },
   drawer: {
-    width: 420, height: "100%",
+    width: 440, height: "100%",
     background: "#fff",
     borderLeft: "1px solid #E0E0E0",
     display: "flex", flexDirection: "column",
     overflowY: "auto",
+    boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
   },
-  drawerHeader: {
+
+  // cabeçalho drawer
+  drawerHead: {
     padding: "16px 20px",
-    borderBottom: "1px solid #E0E0E0",
+    borderBottom: "1px solid #EBEBEB",
     display: "flex", alignItems: "center", gap: 12,
     flexShrink: 0,
   },
   avatar: {
-    width: 40, height: 40, borderRadius: "50%",
+    width: 42, height: 42, borderRadius: "50%",
     background: "#E3F2FD", color: "#1565C0",
     display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 14, fontWeight: 700, flexShrink: 0,
+    fontSize: 15, fontWeight: 700, flexShrink: 0,
   },
   drawerNome: { fontSize: 15, fontWeight: 600, color: "#1A1A1A" },
-  drawerMeta: { fontSize: 12, color: "#888" },
+  drawerMeta: { fontSize: 12, color: "#999", marginTop: 2 },
+  btnFechar: {
+    marginLeft: "auto", background: "none", border: "none",
+    fontSize: 18, cursor: "pointer", color: "#aaa", padding: 4, flexShrink: 0,
+  },
 
   // abas
-  tabRow: {
-    display: "flex", gap: 4, padding: "12px 20px",
-    borderBottom: "1px solid #E0E0E0", flexShrink: 0,
+  abaRow: {
+    display: "flex", gap: 6, padding: "12px 20px",
+    borderBottom: "1px solid #EBEBEB", flexShrink: 0,
+    flexWrap: "wrap",
   },
-  tab: {
-    padding: "5px 12px", borderRadius: 6,
+  aba: {
+    padding: "5px 14px", borderRadius: 6,
     border: "1px solid #E0E0E0",
-    background: "white", color: "#666",
+    background: "#fff", color: "#666",
     fontSize: 12, cursor: "pointer",
   },
-  tabAtivo: {
-    padding: "5px 12px", borderRadius: 6,
+  abaAtiva: {
+    padding: "5px 14px", borderRadius: 6,
     border: "1px solid #F57C00",
-    background: "#F57C00", color: "white",
-    fontSize: 12, cursor: "pointer",
-    fontWeight: 600,
+    background: "#F57C00", color: "#fff",
+    fontSize: 12, cursor: "pointer", fontWeight: 600,
   },
 
   // corpo drawer
-  drawerBody: { flex: 1, padding: "16px 20px", overflowY: "auto" },
-  sectionTitle: {
-    fontSize: 11, fontWeight: 600, color: "#888",
-    textTransform: "uppercase", letterSpacing: "0.06em",
-    marginBottom: 12,
+  drawerBody: { flex: 1, padding: "20px", overflowY: "auto" },
+  secTitulo: {
+    fontSize: 11, fontWeight: 600, color: "#aaa",
+    textTransform: "uppercase", letterSpacing: "0.07em",
+    marginBottom: 14,
   },
-  fieldRow: { marginBottom: 12 },
-  fieldLabel: { display: "block", fontSize: 12, color: "#666", marginBottom: 4 },
-  fieldInput: {
+  campo: { marginBottom: 14 },
+  campoLabel: { display: "block", fontSize: 12, color: "#777", marginBottom: 4 },
+  campoInput: {
     width: "100%", border: "1px solid #E0E0E0",
-    borderRadius: 6, padding: "7px 10px",
+    borderRadius: 7, padding: "8px 10px",
     fontSize: 13, color: "#1A1A1A",
     background: "#FAFAFA", boxSizing: "border-box",
+    outline: "none",
   },
-  avisoBox: {
+  aviso: {
     background: "#FFF8E1", border: "1px solid #FFE082",
     borderRadius: 8, padding: "10px 14px",
     fontSize: 13, color: "#5D4037",
-    marginBottom: 16, lineHeight: 1.5,
+    marginBottom: 18, lineHeight: 1.6,
   },
 
   // auditoria
   auditItem: {
-    display: "flex", gap: 10, alignItems: "flex-start",
-    padding: "10px 0", borderBottom: "1px solid #F5F5F5",
+    display: "flex", gap: 12, alignItems: "flex-start",
+    padding: "12px 0", borderBottom: "1px solid #F5F5F5",
   },
-  auditIcon: { fontSize: 18, flexShrink: 0, marginTop: 2 },
+  auditIcone: { fontSize: 20, flexShrink: 0, marginTop: 1 },
   auditAcao: { fontSize: 13, color: "#1A1A1A", fontWeight: 500 },
-  auditMeta: { fontSize: 12, color: "#888", marginTop: 2 },
+  auditMeta: { fontSize: 12, color: "#aaa", marginTop: 2 },
+  auditDetalhe: { fontSize: 12, color: "#777", marginTop: 4, fontStyle: "italic" },
 
   // footer drawer
   drawerFooter: {
-    padding: "12px 20px",
-    borderTop: "1px solid #E0E0E0",
-    display: "flex", gap: 8, flexShrink: 0,
-    justifyContent: "flex-end",
+    padding: "14px 20px",
+    borderTop: "1px solid #EBEBEB",
+    display: "flex", gap: 8, justifyContent: "flex-end",
+    flexShrink: 0,
   },
 
   // toast
   toast: {
     position: "fixed", bottom: 24, right: 24,
-    color: "white", padding: "12px 20px",
+    color: "#fff", padding: "13px 22px",
     borderRadius: 8, fontSize: 14, fontWeight: 500,
-    zIndex: 9999, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+    zIndex: 9999, boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+    maxWidth: 380,
   },
 };
