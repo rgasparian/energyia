@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { getSupabase } from "@/lib/supabase-browser";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -87,6 +87,7 @@ function AdminPage() {
 
   useEffect(() => {
     (async () => {
+      const supabase = await getSupabase();
       const { data: role } = await supabase.rpc("get_my_role");
       if (role !== "admin") { navigate({ to: "/painel" }); return; }
       await buscarMembros();
@@ -97,6 +98,7 @@ function AdminPage() {
   // ── Membros ─────────────────────────────────────────────────
 
   async function buscarMembros() {
+    const supabase = await getSupabase();
     const { data, error } = await supabase
       .from("usuarios")
       .select("*")
@@ -120,6 +122,7 @@ function AdminPage() {
   }
 
   async function buscarAuditoria(id: string) {
+    const supabase = await getSupabase();
     const { data } = await supabase
       .from("admin_audit_log")
       .select("*")
@@ -135,6 +138,7 @@ function AdminPage() {
     if (!alvo) return false;
     setSalvando(true);
 
+    const supabase = await getSupabase();
     const { data: sessao } = await supabase.auth.getSession();
     const token = sessao?.session?.access_token ?? "";
 
